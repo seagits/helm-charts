@@ -1,0 +1,17 @@
+apiVersion: v1
+entries:
+  ca-overprovisioner:
+  - apiVersion: v2
+    appVersion: "3.3"
+    created: "2023-01-25T01:33:01.076077132Z"
+    description: Helm chart that simplifies deployment of pods that voluntarily gets evicts leaving a room for important pods to come up quickly during scale out activity instead of waiting for Instances to come up which takes longer time.
+    digest: b329a21889a2859524c0ffe24557c79cf2b20e8934f9604af4988ebe4be30d8f
+    maintainers:
+    - email: contact@seagit.com
+      name: Seagit
+    name: ca-overprovisioner
+    type: application
+    urls:
+    - https://github.com/seagits/helm-charts/releases/download/ca-overprovisioner-0.1.0/ca-overprovisioner-0.1.0.tgz
+    version: 0.1.0
+generated: "2023-01-25T01:33:00.736617379Z"
