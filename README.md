@@ -1,6 +1,6 @@
 ## Charts
 
-* [CA-Overprovioner]https://github.com/seagits/helm-charts/tree/master/charts/ca-overprovisioner
+* [CA-Overprovioner](https://github.com/seagits/helm-charts/tree/master/charts/ca-overprovisioner)
 
 ## Usage
 
