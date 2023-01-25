@@ -1,0 +1,10 @@
+{{- if .Values.priorityClasses.default.create -}}
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: {{ .Values.priorityClasses.default.name }} 
+value:  {{ .Values.priorityClasses.default.value }} 
+globalDefault: true
+preemptionPolicy: PreemptLowerPriority # to kill lower priority class - if Never specified it will not work 
+description: "Priority class used by all cluster resources if not specified."
+{{- end }}
