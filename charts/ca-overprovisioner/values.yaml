@@ -21,18 +21,18 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
-# Auto configure priority classes 
+# Auto configure priority classes
 # default is used by default by all cluster resources if not specified
 # over-provisioning is used by overprovisioned pods that voluntarily gets evicted when we have scale out activity
 priorityClasses:
-  default: 
-    create: true 
+  default:
+    create: true
     name: "default"
-    value: 0 
-  overProvision: 
-    create: true 
+    value: 0
+  overProvision:
+    create: true
     name: "overprovision"
-    value: -1 
+    value: -1
 
 podAnnotations: {}
 
@@ -65,16 +65,17 @@ tolerations: []
 
 affinity: {}
 
-topologySpreadConstraints: #different zone then hostname 
+# Different zone then hostname
+topologySpreadConstraints:
   - maxSkew: 1
     topologyKey: topology.kubernetes.io/zone
     whenUnsatisfiable: ScheduleAnyway
     labelSelector:
       matchLabels:
-        app.kubernetes.io/name: dp-pause
+        app.kubernetes.io/name: ca-overprovisioner
   - maxSkew: 1
     topologyKey: kubernetes.io/hostname
     whenUnsatisfiable: ScheduleAnyway
     labelSelector:
       matchLabels:
-        app.kubernetes.io/name: dp-pause
+        app.kubernetes.io/name: ca-overprovisioner
