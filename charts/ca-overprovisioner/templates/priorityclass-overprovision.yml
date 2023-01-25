@@ -1,0 +1,8 @@
+{{- if .Values.priorityClasses.overProvision.create -}}
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: {{ .Values.priorityClasses.overProvision.name }}
+value: {{ .Values.priorityClasses.overProvision.value }}
+description: "Priority class used by over-provisioning."
+{{- end }}

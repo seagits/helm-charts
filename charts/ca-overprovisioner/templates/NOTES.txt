@@ -1,0 +1,5 @@
+Cluster Auto-scaler Overprovisioning has been successfully deployed
+
+# To get list of pods 
+kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "ca-overprovisioner.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}"
+
