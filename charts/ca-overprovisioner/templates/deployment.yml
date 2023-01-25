@@ -9,8 +9,8 @@ spec:
   selector:
     matchLabels:
       {{- include "ca-overprovisioner.selectorLabels" . | nindent 6 }}
-  strategy: 
-    type: Recreate 
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
