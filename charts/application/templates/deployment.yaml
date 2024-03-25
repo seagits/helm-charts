@@ -1,0 +1,197 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "application.fullname" . }}
+  labels:
+    {{- include "application.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "application.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "application.selectorLabels" . | nindent 8 }}
+        {{- range $key, $value := .Values.podLabels }}
+        {{ $key }}: "{{ $value }}"
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "application.serviceAccountName" . }}
+      securityContext:
+{{- toYaml .Values.podSecurityContext | nindent 8 }}
+
+      {{- if .Values.hostAliases }}
+      hostAliases:
+{{ toYaml .Values.hostAliases | indent 8 }}
+      {{- end }}
+
+      {{- if .Values.dnsPolicy }}
+      dnsPolicy: {{ .Values.dnsPolicy }}
+      {{- end }}
+
+      {{- if gt (len .Values.initContainers) 0 }}
+      initContainers:
+        {{- range $key, $value := .Values.initContainers  }}
+        - name: {{ $key }}
+        {{ toYaml $value | nindent 10 }}
+        {{- end }}
+      {{- end }}
+      
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          
+          {{- if .Values.command }}
+          command:
+          {{- toYaml .Values.command | nindent 12 }}
+          {{- end }}
+          
+          {{- if .Values.args }}
+          args:
+            {{- toYaml .Values.args | nindent 12 }}
+          {{- end }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          {{- if or (.Values.service.port) (and .Values.ports (gt (len .Values.ports) 0)) }}
+          ports:
+            {{- if and .Values.ports (gt (len .Values.ports) 0) }}
+            {{- range $key, $portSpec := .Values.ports }}
+            - name: {{ $key }}
+              containerPort: {{ int $portSpec.port }}
+              protocol: {{ $portSpec.protocol }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.service.port }}
+            - name: http
+              containerPort: {{ .Values.service.port | default 80 }}
+              protocol: TCP
+            {{- end }}
+          {{- end }}
+
+          {{- if .Values.startupProbe }}
+          startupProbe:
+            {{- toYaml .Values.startupProbe | nindent 12 }}
+          {{- end }}
+
+          livenessProbe:
+          {{- if .Values.livenessProbe }}
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          {{- else }}
+            httpGet:
+              path: /
+              port: http
+          {{- end }}
+
+          readinessProbe:
+          {{- if .Values.readinessProbe }}
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          {{- else }}
+            httpGet:
+              path: /
+              port: http
+          {{- end }}
+          
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+           
+          {{- if or .Values.lifecycleHooks.enabled (gt (int .Values.shutdownDelaySeconds) 0) }}
+          lifecycle:
+            {{- if and .Values.lifecycleHooks.enabled .Values.lifecycleHooks.postStart }}
+            postStart:
+              {{- toYaml .Values.lifecycleHooks.postStart | nindent 14 }}
+            {{- end }}
+
+            {{- if and .Values.lifecycleHooks.enabled .Values.lifecycleHooks.preStop }}
+            preStop:
+              {{- toYaml .Values.lifecycleHooks.preStop | nindent 14 }}
+            {{- else if gt (int .Values.shutdownDelaySeconds) 0 }}
+            # Include a preStop hook with a shutdown delay for eventual consistency reasons.
+            # See https://blog.gruntwork.io/delaying-shutdown-to-wait-for-pod-deletion-propagation-445f779a8304
+            preStop:
+              exec:
+                command:
+                  - sleep
+                  - "{{ int .Values.shutdownDelaySeconds }}"
+            {{- end }}
+
+          {{- end }}
+
+          {{- /* START ENV VARS */ -}}
+          {{- if .Values.env }}
+          env:
+          {{- end }}
+          {{- range $key, $value := .Values.env  }}
+           {{- if eq (printf "%T" $value) "string" }}
+            - name: {{ $key }}
+              value: {{ quote $value }}
+
+            {{- else if and  ($value)   ($value.source) (eq $value.source "configmap") }}
+            - name: {{ $key }}
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ quote $value.name }}
+                  key: {{ quote $value.key }}
+            {{- else if and ($value) ($value.source) (eq $value.source "secret") }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ quote $value.name }}
+                  key: {{ quote $value.key }}
+           
+            {{- end }}
+          {{- end }}
+
+          {{- if and (.Values.envFrom) (or (gt (len .Values.envFrom.configMaps) 0) (gt (len .Values.envFrom.secrets) 0)) }}
+          envFrom:
+            {{- if .Values.envFrom.configMaps }}
+            {{- range $name := .Values.envFrom.configMaps }}
+            - configMapRef:
+                name: {{ quote $name }}
+            {{- end }}
+            {{- end }}
+          
+            {{- if .Values.envFrom.secrets }}
+            {{- range $name := .Values.envFrom.secrets  }}
+            - secretRef:
+                name: {{ quote $name }}
+            {{- end }}
+            {{- end }}
+          {{- end }}
+      {{- /* END ENV VARS */ -}}
+
+      {{- if .Values.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- end}}
+
+      {{- with   .Values.priorityClassName   }}
+      priorityClassName: {{ . | quote }}
+      {{- end }}
+
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

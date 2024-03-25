@@ -1,0 +1,17 @@
+{{- if and (.Values.service) (.Values.service.port) -}}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "application.fullname" . }}-test-connection"
+  labels:
+    {{- include "application.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      args: ['{{ include "application.fullname" . }}:{{ .Values.service.port | default 80 }}']
+  restartPolicy: Never
+{{- end }}

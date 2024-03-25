@@ -1,0 +1,17 @@
+{{- if and (.Values.service) (.Values.service.type) (.Values.service.port)  }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "application.fullname" . }}
+  labels:
+    {{- include "application.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type | default "ClusterIP" }}
+  ports:
+    - port: {{ .Values.service.port | default 80 }}
+      targetPort: http
+      protocol: {{ .Values.service.protocol | default "TCP"  }}
+      name: http
+  selector:
+    {{- include "application.selectorLabels" . | nindent 4 }}
+{{- end }}
