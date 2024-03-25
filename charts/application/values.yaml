@@ -1,0 +1,310 @@
+# Default values for application.
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 1
+
+image:
+  repository: nginx
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+imagePullSecrets: []
+# imagePullSecrets:
+# - secret1
+# - secret2 
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+# additional annotations that you want to add to the pod 
+# Examples: 
+# podAnnotations: 
+#   key1: value1
+#   key2: value2
+
+
+podLabels: {}
+# additional labels that you want to add to the pod 
+# Examples: 
+# podLabels: 
+#   key1: value1
+#   key2: value2
+
+podSecurityContext: {}
+  # fsGroup: 2000
+# The access control settings for the whole pod.
+# https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+
+securityContext: {}
+# The access control settings for the main container. 
+# https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+
+
+# Examples: 
+# 1) To run a container in privileged mode
+# securityContext:
+#   privileged: true
+#
+
+# 2) To run a container as a specific user
+# securityContext:
+#   runAsUser: 2000
+
+# 3) custom capabilities (specific user and non root user)
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+hostAliases: []
+# additional hosts to be added to the pod /etc/hosts 
+# Example: 
+# hostAliases: 
+#   - ip: 10.1.1.1
+#     hostname: 
+#       - foo.example.com 
+#       - bar.example.com 
+
+dnsPolicy: {}
+initContainers: {}
+
+# List of strings to pass to the main container (CMD) - Entry point of the container
+command: []
+# command:
+#   - "echo"
+#   - "Hello World"
+
+# List of strings to pass to the main container 
+args: []
+# args:
+#   - "echo"
+#   - "Hello World"
+
+startupProbe: {}
+# startupProbe is a map that specifies the startup probe of the main application container. Startup probes indicate
+# when a container application has started. If such a probe is configured, it disables liveness and readiness checks
+# until it succeeds, making sure those probes don't interfere with the application startup. This can be used to adopt
+# liveness checks on slow starting containers, avoiding them getting killed by the kubelet before they are up and running.
+# You can read more about container startup probes in the official docs:
+# https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+# NOTE: This variable is injected directly into the container spec.
+
+# startupProbe:
+#   httpGet:
+#     path: /
+#     port: http
+#   failureThreshold: 30
+#   periodSeconds: 10
+
+readinessProbe: {}
+livenessProbe: {}
+# livenessProbe is a map that specifies the liveness probe of the main application container. Liveness probes indicate
+# when a container has reached a fatal state where it needs to be restarted to recover. When the liveness probe fails,
+# the container is automatically recreated. You can read more about container liveness probes in the official docs:
+# https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+# NOTE: This variable is injected directly into the container spec.
+#
+# The following example specifies an http GET based liveness probe that will be based on a http GET request to
+# the port bound to name `http` (see description on `containerPorts`) on the path `/`.
+#
+# EXAMPLE:
+#
+# livenessProbe:
+#   httpGet:
+#     path: /
+#     port: http 
+  # httpGet:
+  #   path: /
+  #   port: http 
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+# before shutting down, wait or delay by how many seconds 
+shutdownDelaySeconds: 0
+
+#preStop specified has higher priority than shutdownDelay - in other words, if preStop is set, shutdownDelay will be ignored 
+lifecycleHooks: 
+  enabled: true
+  postStart: {}
+  preStop: {}
+  # preStop: 
+  #   exec: 
+  #     command: 
+  #       - sleep 
+  #       - "50"
+
+
+terminationGracePeriodSeconds: 0
+# terminationGracePeriodSeconds that will be used to set grace period for K8s to wait before terminating the pods of deployment. 
+# Once this triggers preStop will be executed and Kubelet will send SIGTERM at the same time to the pods without wiating for preStop to finish.
+
+
+env: {}
+# env: 
+#   cm:
+#     source: "configmap"
+#     name: "cm_name"
+#     key: "cm_key"
+#   sec: 
+#     source: "secret"
+#     name: "sec_name"
+#     key: "sec_key"
+#   key: value 
+
+# envFrom: 
+#   configMaps: []
+#   secrets: []
+envFrom: 
+  configMaps: 
+    - config1
+  secrets: 
+    - secret1
+
+# expose application as a service (NodePort - LoadBalancer - ClusterIP )
+service: {}
+  # type: ClusterIP
+  # port: 80
+  # protocol: TCP
+
+# expose any additional ports 
+ports: {}
+# Override the default containerPorts. Specifically, defining a new
+# ports in values.yaml will be merged with the default provided by the
+# chart. For example, if the user provides:
+#       ports:
+#         app:
+#           port: 8080
+#           protocol: TCP
+# Then this is merged with the default and becomes:
+#       ports:
+#         app:
+#           port: 8080
+#           protocol: TCP
+#         http:
+#           port: 80
+#           protocol: TCP
+#         https:
+#           port: 443
+#           protocol: TCP
+
+ingress:
+  enabled: false #this needs to be in sync with service.port 
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+tolerations: []
+# Allows you to place deployments in specific nodes that were marked with taints 
+# https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
+
+nodeSelector: {}
+# Allows you to place deployments in specific nodes with selector - here is an example of how to place pods in those instances that have disks of type ssd 
+# nodeSelector: 
+#   disktype: ssd 
+
+
+affinity: {}
+# https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
+# example showing how to put/place deployment only in zones us-east-1a or us-west-1a (a must have) 
+  # nodeAffinity:
+  #   requiredDuringSchedulingIgnoredDuringExecution:
+  #     nodeSelectorTerms:
+  #     - matchExpressions:
+  #       - key: topology.kubernetes.io/zone
+  #         operator: In
+  #         values:
+  #         - us-east-1a
+  #         - us-west-1a
+  #   preferredDuringSchedulingIgnoredDuringExecution:
+  #   - weight: 1
+  #     preference:
+  #       matchExpressions:
+  #       - key: another-node-label-key
+  #         operator: In
+  #         values:
+  #         - another-node-label-value
+
+# here is an example of how to place deployment into any node that is not in fargate 
+    # nodeAffinity:
+    #   requiredDuringSchedulingIgnoredDuringExecution:
+    #     nodeSelectorTerms:
+    #     - matchExpressions:
+    #       - key: eks.amazonaws.com/compute-type
+    #         operator: NotIn
+    #         values:
+    #         - fargate
+
+priorityClassName: ""
+# priorityClassName assigns a priorityClass to the deployment allowing pods to preempt (kick out other pods) or be preempted (being kicked out leaving resources/space for others with higher priority).
+# See https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#priorityclass
+
+customResources: {}
+
+# customResources is a map that lets you define Kubernetes resources you want installed and configured as part of this chart.
+# EXAMPLE:
+#
+# customResources:
+#   custom_configmap: |
+#     apiVersion: v1
+#     kind: ConfigMap
+#     metadata:
+#       name: example
+#     data:
+#       key: value
+#   custom_secret: |
+#     apiVersion: v1
+#     kind: Secret
+#     metadata:
+#       name: secretName
+#     type: Opaque
+#     data:
+#       key: c2VjcmV0VmFsdWUK
+
+serviceMonitor: 
+  enabled: false 
+  namespace: monitoring
+  labels: {}
+  endpoints: {}
+
+podDisruptionBudget:
+  minAvailable: 1
+

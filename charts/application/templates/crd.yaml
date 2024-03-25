@@ -1,0 +1,6 @@
+{{- if and (.Values.customResources) (gt (len .Values.customResources) 0) -}}
+{{- range $name, $value := .Values.customResources }}
+---
+{{ $value }}
+{{- end }}
+{{- end }}
