@@ -2,7 +2,7 @@ apiVersion: v2
 name: ca-overprovisioner
 description: Helm chart that simplifies deployment of pods that voluntarily gets evicts leaving a room for important pods to come up quickly during scale out activity instead of waiting for Instances to come up which takes longer time.
 type: application
-version: 0.1.0
+version: 0.2.0
 appVersion: "3.3"
 maintainers:
 - email: contact@seagit.com
