@@ -1,10 +1,43 @@
 apiVersion: v1
 entries:
+  application:
+  - apiVersion: v2
+    appVersion: 1.16.0
+    created: "2024-03-25T20:57:44.12379739Z"
+    description: A Helm chart for deploying a highly available and scalable application
+      in Kubernetes clusters
+    digest: 55623e5fd9137287b828e03762c678af9f7a5e57cd7fcfbac4acdb833d8e697c
+    maintainers:
+    - email: contact@seagit.com
+      name: Seagit
+      url: https://seagit.com
+    name: application
+    type: application
+    urls:
+    - https://github.com/seagits/helm-charts/releases/download/application-0.2.0/application-0.2.0.tgz
+    version: 0.2.0
   ca-overprovisioner:
   - apiVersion: v2
     appVersion: "3.3"
+    created: "2024-03-25T20:57:44.301922044Z"
+    description: Helm chart that simplifies deployment of pods that voluntarily gets
+      evicts leaving a room for important pods to come up quickly during scale out
+      activity instead of waiting for Instances to come up which takes longer time.
+    digest: a01ab3380d7c1bdd908f92e1388112eb047c818b0965ba742de7c7cc93cefdac
+    maintainers:
+    - email: contact@seagit.com
+      name: Seagit
+    name: ca-overprovisioner
+    type: application
+    urls:
+    - https://github.com/seagits/helm-charts/releases/download/ca-overprovisioner-0.2.0/ca-overprovisioner-0.2.0.tgz
+    version: 0.2.0
+  - apiVersion: v2
+    appVersion: "3.3"
     created: "2023-01-25T01:33:01.076077132Z"
-    description: Helm chart that simplifies deployment of pods that voluntarily gets evicts leaving a room for important pods to come up quickly during scale out activity instead of waiting for Instances to come up which takes longer time.
+    description: Helm chart that simplifies deployment of pods that voluntarily gets
+      evicts leaving a room for important pods to come up quickly during scale out
+      activity instead of waiting for Instances to come up which takes longer time.
     digest: b329a21889a2859524c0ffe24557c79cf2b20e8934f9604af4988ebe4be30d8f
     maintainers:
     - email: contact@seagit.com
@@ -14,4 +47,4 @@ entries:
     urls:
     - https://github.com/seagits/helm-charts/releases/download/ca-overprovisioner-0.1.0/ca-overprovisioner-0.1.0.tgz
     version: 0.1.0
-generated: "2023-01-25T01:33:00.736617379Z"
+generated: "2024-03-25T20:57:44.301930129Z"
