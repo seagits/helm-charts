@@ -2,7 +2,7 @@
 nameOverride: ""
 fullnameOverride: ""
 
-replicaCount: 1
+replicaCount: 2
 
 image:
   repository: nginx
@@ -23,6 +23,21 @@ serviceAccount:
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
   name: ""
+
+topologySpreadConstraints: 
+# topologySpreadConstraints allows users to control how pods are spread evenly across different failure domains such as zones or nodes for improved resilience and availability.
+# matchLabels are automatically calculated for you but if you want to override and pass custom labels you could define labels under labelSelector
+# default constraint distribute pods evenly across zones
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+# here is an example of how to pass your own labelSelector     
+  # - maxSkew: 1
+  #   topologyKey: kubernetes.io/hostname
+  #   whenUnsatisfiable: ScheduleAnyway
+  #   labelSelector: 
+  #     matchLabels: 
+  #       app: wikimovie-service 
 
 podAnnotations: {}
 # additional annotations that you want to add to the pod 
@@ -140,12 +155,29 @@ resources: {}
   #   cpu: 100m
   #   memory: 128Mi
 
-# before shutting down, wait or delay by how many seconds 
+terminationGracePeriodSeconds: 30
+# terminationGracePeriodSeconds that will be used to set grace period for K8s to wait before terminating the pods of deployment. 
+# specifies the amount of time Kubernetes should wait for a pod to terminate gracefully before forcibly terminating it. 
+# During this period, Kubernetes sends a SIGTERM signal to the main container process, allowing it to perform cleanup tasks, close open connections, and terminate gracefully. 
+# If the pod does not terminate within the specified grace period, Kubernetes sends a SIGKILL signal to forcibly terminate the pod.
+# Once this triggers preStop will be executed and Kubelet will send SIGTERM at the same time to the pods without waiting for preStop to finish.
+
+# New Pod coming up -> serve traffic with old ones 
+#                                                  -> SIGTERM old one ->  ... wait for terminationGracePeriod ...    
+#                                                                     -> pod still serving traffic            
+#                                                                     -> preStop executing (drain conns/cleanup)
+#                                                                                                                  -> SIGKILL (forced termination)
+
+# before shutting down, wait or delay by how many seconds (this will be overriden if lifecycleHooks is enabled and preStop is defined)
 shutdownDelaySeconds: 0
 
+# preStop a mechanism for running arbitrary commands or scripts inside a container before it is terminated. 
+# It allows you to perform custom cleanup tasks or gracefully shut down applications running within the container. 
+# The preStop hook is executed after Kubernetes sends the SIGTERM signal but before the container is terminated. 
+# This hook can be useful for tasks such as draining connections, flushing caches, or releasing resources.
 #preStop specified has higher priority than shutdownDelay - in other words, if preStop is set, shutdownDelay will be ignored 
 lifecycleHooks: 
-  enabled: true
+  enabled: false
   postStart: {}
   preStop: {}
   # preStop: 
@@ -153,11 +185,6 @@ lifecycleHooks:
   #     command: 
   #       - sleep 
   #       - "50"
-
-
-terminationGracePeriodSeconds: 0
-# terminationGracePeriodSeconds that will be used to set grace period for K8s to wait before terminating the pods of deployment. 
-# Once this triggers preStop will be executed and Kubelet will send SIGTERM at the same time to the pods without wiating for preStop to finish.
 
 
 env: {}
@@ -172,14 +199,15 @@ env: {}
 #     key: "sec_key"
 #   key: value 
 
-# envFrom: 
-#   configMaps: []
-#   secrets: []
 envFrom: 
-  configMaps: 
-    - config1
-  secrets: 
-    - secret1
+  configMaps: []
+  secrets: []
+# Example
+# envFrom: 
+#   configMaps: 
+#     - config1
+#   secrets: 
+#     - secret1
 
 # expose application as a service (NodePort - LoadBalancer - ClusterIP )
 service: {}
@@ -228,18 +256,20 @@ ingress:
 autoscaling:
   enabled: false
   minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
 
 tolerations: []
 # Allows you to place deployments in specific nodes that were marked with taints 
 # https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
 
 nodeSelector: {}
-# Allows you to place deployments in specific nodes with selector - here is an example of how to place pods in those instances that have disks of type ssd 
+# Allows you to place deployments in specific nodes with selector - here is an example of how to place pods in those instances that have disks of type ssd - instances of type linux - or arm64 cpu arch 
 # nodeSelector: 
-#   disktype: ssd 
+#   segt.io/disksize: ssd 
+#   kubernetes.io/arch: arm64 
+#   kubernetes.io/os: linux
 
 
 affinity: {}
@@ -306,5 +336,9 @@ serviceMonitor:
   endpoints: {}
 
 podDisruptionBudget:
-  minAvailable: 1
-
+# The Pod Disruption Budget (PDB) in Kubernetes allows you to control the disruption caused by voluntary disruptions like scaling down, drain, and disruption budget constraints. 
+# PDB has either minAvailable or maxUnavailable but they can not go together
+# maxUnavailable: specifies the maximum number or percentage of pods that can be unavailable during voluntary disruptions. For example, you can set it to 1, meaning only one pod can be down at any given time.
+# minAvailable: specifies the minimum number or percentage of pods that should remain available during voluntary disruptions. It ensures that a certain level of redundancy is maintained even during disruptions.
+  maxUnavailable: 1
+  # minAvailable: 

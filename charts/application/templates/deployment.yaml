@@ -1,3 +1,4 @@
+{{- $selectorLabels := include "application.selectorLabels" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -10,7 +11,7 @@ spec:
   {{- end }}
   selector:
     matchLabels:
-      {{- include "application.selectorLabels" . | nindent 6 }}
+      {{- $selectorLabels | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -18,22 +19,22 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "application.selectorLabels" . | nindent 8 }}
+        {{- $selectorLabels | nindent 8 }}
         {{- range $key, $value := .Values.podLabels }}
         {{ $key }}: "{{ $value }}"
         {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
-{{- toYaml . | nindent 8 }}
+      {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "application.serviceAccountName" . }}
       securityContext:
-{{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- toYaml .Values.podSecurityContext | nindent 8 }}
 
       {{- if .Values.hostAliases }}
       hostAliases:
-{{ toYaml .Values.hostAliases | indent 8 }}
+      {{ toYaml .Values.hostAliases | indent 8 }}
       {{- end }}
 
       {{- if .Values.dnsPolicy }}
@@ -177,7 +178,22 @@ spec:
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       {{- end}}
 
-      {{- with   .Values.priorityClassName   }}
+      {{- if and (.Values.topologySpreadConstraints) (gt (len .Values.topologySpreadConstraints) 0) }}
+      topologySpreadConstraints:      
+      {{- range $constraint := .Values.topologySpreadConstraints }}
+        - maxSkew: {{ $constraint.maxSkew }}
+          topologyKey: {{ $constraint.topologyKey }}
+          whenUnsatisfiable: {{ $constraint.whenUnsatisfiable }}
+          labelSelector:
+            {{- if $constraint.labelSelector }}
+            matchLabels: {{- toYaml $constraint.labelSelector.matchLabels | nindent 14 }}
+            {{- else }}
+            matchLabels: {{ $selectorLabels | nindent 14 }}
+            {{- end }}
+      {{- end }}
+      {{- end }}
+
+      {{- with  .Values.priorityClassName  }}
       priorityClassName: {{ . | quote }}
       {{- end }}
 
