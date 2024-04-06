@@ -3,7 +3,7 @@ name: application
 description: A Helm chart for deploying a highly available and scalable application in Kubernetes clusters
 type: application
 version: 0.3.0
-appVersion: "0.3.0"
+appVersion: "1.16.0"
 maintainers: 
 - name: Seagit
   email: contact@seagit.com
