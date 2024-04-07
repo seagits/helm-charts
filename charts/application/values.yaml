@@ -13,7 +13,7 @@ image:
 imagePullSecrets: []
 # imagePullSecrets:
 # - secret1
-# - secret2 
+# - secret2
 
 serviceAccount:
   # Specifies whether a service account should be created
@@ -24,33 +24,32 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
-topologySpreadConstraints: 
+topologySpreadConstraints:
 # topologySpreadConstraints allows users to control how pods are spread evenly across different failure domains such as zones or nodes for improved resilience and availability.
 # matchLabels are automatically calculated for you but if you want to override and pass custom labels you could define labels under labelSelector
 # default constraint distribute pods evenly across zones
   - maxSkew: 1
     topologyKey: topology.kubernetes.io/zone
     whenUnsatisfiable: ScheduleAnyway
-# here is an example of how to pass your own labelSelector     
+# here is an example of how to pass your own labelSelector
   # - maxSkew: 1
   #   topologyKey: kubernetes.io/hostname
   #   whenUnsatisfiable: ScheduleAnyway
-  #   labelSelector: 
-  #     matchLabels: 
-  #       app: wikimovie-service 
+  #   labelSelector:
+  #     matchLabels:
+  #       app: wikimovie-service
 
 podAnnotations: {}
-# additional annotations that you want to add to the pod 
-# Examples: 
-# podAnnotations: 
+# additional annotations that you want to add to the pod
+# Examples:
+# podAnnotations:
 #   key1: value1
 #   key2: value2
 
-
 podLabels: {}
-# additional labels that you want to add to the pod 
-# Examples: 
-# podLabels: 
+# additional labels that you want to add to the pod
+# Examples:
+# podLabels:
 #   key1: value1
 #   key2: value2
 
@@ -60,15 +59,13 @@ podSecurityContext: {}
 # https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
 
 securityContext: {}
-# The access control settings for the main container. 
+# The access control settings for the main container.
 # https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
 
-
-# Examples: 
+# Examples:
 # 1) To run a container in privileged mode
 # securityContext:
 #   privileged: true
-#
 
 # 2) To run a container as a specific user
 # securityContext:
@@ -83,13 +80,13 @@ securityContext: {}
   # runAsUser: 1000
 
 hostAliases: []
-# additional hosts to be added to the pod /etc/hosts 
-# Example: 
-# hostAliases: 
+# additional hosts to be added to the pod /etc/hosts
+# Example:
+# hostAliases:
 #   - ip: 10.1.1.1
-#     hostname: 
-#       - foo.example.com 
-#       - bar.example.com 
+#     hostname:
+#       - foo.example.com
+#       - bar.example.com
 
 dnsPolicy: {}
 initContainers: {}
@@ -100,7 +97,7 @@ command: []
 #   - "echo"
 #   - "Hello World"
 
-# List of strings to pass to the main container 
+# List of strings to pass to the main container
 args: []
 # args:
 #   - "echo"
@@ -138,10 +135,10 @@ livenessProbe: {}
 # livenessProbe:
 #   httpGet:
 #     path: /
-#     port: http 
+#     port: http
   # httpGet:
   #   path: /
-  #   port: http 
+  #   port: http
 
 resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
@@ -156,57 +153,55 @@ resources: {}
   #   memory: 128Mi
 
 terminationGracePeriodSeconds: 30
-# terminationGracePeriodSeconds that will be used to set grace period for K8s to wait before terminating the pods of deployment. 
-# specifies the amount of time Kubernetes should wait for a pod to terminate gracefully before forcibly terminating it. 
-# During this period, Kubernetes sends a SIGTERM signal to the main container process, allowing it to perform cleanup tasks, close open connections, and terminate gracefully. 
+# terminationGracePeriodSeconds that will be used to set grace period for K8s to wait before terminating the pods of deployment.
+# specifies the amount of time Kubernetes should wait for a pod to terminate gracefully before forcibly terminating it.
+# During this period, Kubernetes sends a SIGTERM signal to the main container process, allowing it to perform cleanup tasks, close open connections, and terminate gracefully.
 # If the pod does not terminate within the specified grace period, Kubernetes sends a SIGKILL signal to forcibly terminate the pod.
 # Once this triggers preStop will be executed and Kubelet will send SIGTERM at the same time to the pods without waiting for preStop to finish.
 
-# New Pod coming up -> serve traffic with old ones 
-#                                                  -> SIGTERM old one ->  ... wait for terminationGracePeriod ...    
-#                                                                     -> pod still serving traffic            
+# New Pod coming up -> serve traffic with old ones
+#                                                  -> SIGTERM old one ->  ... wait for terminationGracePeriod ...
+#                                                                     -> pod still serving traffic
 #                                                                     -> preStop executing (drain conns/cleanup)
 #                                                                                                                  -> SIGKILL (forced termination)
-
 # before shutting down, wait or delay by how many seconds (this will be overriden if lifecycleHooks is enabled and preStop is defined)
 shutdownDelaySeconds: 0
 
-# preStop a mechanism for running arbitrary commands or scripts inside a container before it is terminated. 
-# It allows you to perform custom cleanup tasks or gracefully shut down applications running within the container. 
-# The preStop hook is executed after Kubernetes sends the SIGTERM signal but before the container is terminated. 
+# preStop a mechanism for running arbitrary commands or scripts inside a container before it is terminated.
+# It allows you to perform custom cleanup tasks or gracefully shut down applications running within the container.
+# The preStop hook is executed after Kubernetes sends the SIGTERM signal but before the container is terminated.
 # This hook can be useful for tasks such as draining connections, flushing caches, or releasing resources.
-#preStop specified has higher priority than shutdownDelay - in other words, if preStop is set, shutdownDelay will be ignored 
-lifecycleHooks: 
+#preStop specified has higher priority than shutdownDelay - in other words, if preStop is set, shutdownDelay will be ignored
+lifecycleHooks:
   enabled: false
   postStart: {}
   preStop: {}
-  # preStop: 
-  #   exec: 
-  #     command: 
-  #       - sleep 
+  # preStop:
+  #   exec:
+  #     command:
+  #       - sleep
   #       - "50"
 
-
 env: {}
-# env: 
+# env:
 #   cm:
 #     source: "configmap"
 #     name: "cm_name"
 #     key: "cm_key"
-#   sec: 
+#   sec:
 #     source: "secret"
 #     name: "sec_name"
 #     key: "sec_key"
-#   key: value 
+#   key: value
 
-envFrom: 
+envFrom:
   configMaps: []
   secrets: []
 # Example
-# envFrom: 
-#   configMaps: 
+# envFrom:
+#   configMaps:
 #     - config1
-#   secrets: 
+#   secrets:
 #     - secret1
 
 # expose application as a service (NodePort - LoadBalancer - ClusterIP )
@@ -215,7 +210,7 @@ service: {}
   # port: 80
   # protocol: TCP
 
-# expose any additional ports 
+# expose any additional ports
 ports: {}
 # Override the default containerPorts. Specifically, defining a new
 # ports in values.yaml will be merged with the default provided by the
@@ -237,7 +232,7 @@ ports: {}
 #           protocol: TCP
 
 ingress:
-  enabled: false #this needs to be in sync with service.port 
+  enabled: false #this needs to be in sync with service.port
   className: ""
   annotations: {}
     # kubernetes.io/ingress.class: nginx
@@ -261,20 +256,20 @@ autoscaling:
   targetMemoryUtilizationPercentage: 80
 
 tolerations: []
-# Allows you to place deployments in specific nodes that were marked with taints 
+# Allows you to place deployments in specific nodes that were marked with taints
 # https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
 
 nodeSelector: {}
-# Allows you to place deployments in specific nodes with selector - here is an example of how to place pods in those instances that have disks of type ssd - instances of type linux - or arm64 cpu arch 
-# nodeSelector: 
-#   segt.io/disksize: ssd 
-#   kubernetes.io/arch: arm64 
+# Allows you to place deployments in specific nodes with selector - here is an example of how to place pods in those instances that have disks of type ssd - instances of type linux - or arm64 cpu arch
+# nodeSelector:
+#   segt.io/disksize: ssd
+#   kubernetes.io/arch: arm64
 #   kubernetes.io/os: linux
 
 
 affinity: {}
 # https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
-# example showing how to put/place deployment only in zones us-east-1a or us-west-1a (a must have) 
+# example showing how to put/place deployment only in zones us-east-1a or us-west-1a (a must have)
   # nodeAffinity:
   #   requiredDuringSchedulingIgnoredDuringExecution:
   #     nodeSelectorTerms:
@@ -293,7 +288,7 @@ affinity: {}
   #         values:
   #         - another-node-label-value
 
-# here is an example of how to place deployment into any node that is not in fargate 
+# here is an example of how to place deployment into any node that is not in fargate
     # nodeAffinity:
     #   requiredDuringSchedulingIgnoredDuringExecution:
     #     nodeSelectorTerms:
@@ -329,16 +324,16 @@ customResources: {}
 #     data:
 #       key: c2VjcmV0VmFsdWUK
 
-serviceMonitor: 
-  enabled: false 
+serviceMonitor:
+  enabled: false
   namespace: monitoring
   labels: {}
   endpoints: {}
 
 podDisruptionBudget:
-# The Pod Disruption Budget (PDB) in Kubernetes allows you to control the disruption caused by voluntary disruptions like scaling down, drain, and disruption budget constraints. 
+# The Pod Disruption Budget (PDB) in Kubernetes allows you to control the disruption caused by voluntary disruptions like scaling down, drain, and disruption budget constraints.
 # PDB has either minAvailable or maxUnavailable but they can not go together
 # maxUnavailable: specifies the maximum number or percentage of pods that can be unavailable during voluntary disruptions. For example, you can set it to 1, meaning only one pod can be down at any given time.
 # minAvailable: specifies the minimum number or percentage of pods that should remain available during voluntary disruptions. It ensures that a certain level of redundancy is maintained even during disruptions.
   maxUnavailable: 1
-  # minAvailable: 
+  # minAvailable:
