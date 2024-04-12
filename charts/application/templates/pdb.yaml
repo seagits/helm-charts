@@ -10,7 +10,7 @@ metadata:
   labels:
     {{- include "application.labels" . | nindent 4 }}    
 spec:
-  minAvailable: {{ int .Values.podDisruptionBudget.minAvailable }}
+  {{- toYaml .Values.podDisruptionBudget | nindent 2 }}
   selector:
     matchLabels:
       {{- include "application.selectorLabels" . | nindent 6 }}
