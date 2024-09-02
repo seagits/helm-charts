@@ -1,4 +1,5 @@
 {{- $selectorLabels := include "application.selectorLabels" . }}
+{{- $httpPortExists := false }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -71,14 +72,21 @@ spec:
           ports:
             {{- if and .Values.ports (gt (len .Values.ports) 0) }}
             {{- range $key, $portSpec := .Values.ports }}
+            {{- if $key == "http" }}
+            {{- $httpPortExists = true }}
+            {{- end }}
             - name: {{ $key }}
               containerPort: {{ int $portSpec.port }}
               protocol: {{ $portSpec.protocol }}
             {{- end }}
-            {{- end }}
-            {{- if .Values.service.port }}
+            {{- else }}
             - name: http
-              containerPort: {{ .Values.service.port | default 80 }}
+              containerPort: 80
+              protocol: TCP            
+            {{- end }}
+            {{- if ne $httpPortExists true }}
+            - name: http
+              containerPort: 80
               protocol: TCP
             {{- end }}
           {{- end }}
