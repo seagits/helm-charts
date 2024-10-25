@@ -208,6 +208,7 @@ envFrom:
 service:
   type: "ClusterIP"
   port: 80
+  targetPort: 80
   protocol: TCP
 
 # expose any additional ports

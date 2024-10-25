@@ -76,9 +76,9 @@ spec:
               protocol: {{ $portSpec.protocol | default "TCP" }}
             {{- end }}
             {{- end }}
-            {{- if and (.Values.service) (.Values.service.port) (gt (int .Values.service.port) 0) }}
+            {{- if and (.Values.service) (.Values.service.targetPort) (gt (int .Values.service.targetPort) 0) }}
             - name: http
-              containerPort: {{ .Values.service.port | default 80 }}
+              containerPort: {{ .Values.service.targetPort | default 80 }}
               protocol: TCP
             {{- end }}
           {{- end }}
