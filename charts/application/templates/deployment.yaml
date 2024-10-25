@@ -67,16 +67,16 @@ spec:
           {{- end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
-          {{- if or (.Values.service.port) (and .Values.ports (gt (len .Values.ports) 0)) }}
+          {{- if or (and (.Values.service) (.Values.service.port)) (and .Values.ports (gt (len .Values.ports) 0)) }}
           ports:
             {{- if and .Values.ports (gt (len .Values.ports) 0) }}
             {{- range $key, $portSpec := .Values.ports }}
             - name: {{ $key }}
               containerPort: {{ int $portSpec.port }}
-              protocol: {{ $portSpec.protocol }}
+              protocol: {{ $portSpec.protocol | default "TCP" }}
             {{- end }}
             {{- end }}
-            {{- if .Values.service.port }}
+            {{- if and (.Values.service) (.Values.service.port) (gt (int .Values.service.port) 0) }}
             - name: http
               containerPort: {{ .Values.service.port | default 80 }}
               protocol: TCP
