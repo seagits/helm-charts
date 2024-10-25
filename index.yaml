@@ -3,6 +3,21 @@ entries:
   application:
   - apiVersion: v2
     appVersion: stable-alpine3.17-slim
+    created: "2024-10-25T21:40:33.510872825Z"
+    description: A Helm chart for deploying a highly available and scalable application
+      in Kubernetes clusters
+    digest: a256c090002eaab7ce3cb5969e92a848d91e89c77958c7396c1c8525c27f02bf
+    maintainers:
+    - email: contact@seagit.com
+      name: Seagit
+      url: https://seagit.com
+    name: application
+    type: application
+    urls:
+    - https://github.com/seagits/helm-charts/releases/download/application-0.6.0/application-0.6.0.tgz
+    version: 0.6.0
+  - apiVersion: v2
+    appVersion: stable-alpine3.17-slim
     created: "2024-04-15T15:52:00.152886164Z"
     description: A Helm chart for deploying a highly available and scalable application
       in Kubernetes clusters
@@ -77,4 +92,4 @@ entries:
     urls:
     - https://github.com/seagits/helm-charts/releases/download/ca-overprovisioner-0.1.0/ca-overprovisioner-0.1.0.tgz
     version: 0.1.0
-generated: "2024-04-15T15:52:00.152924777Z"
+generated: "2024-10-25T21:40:33.510895557Z"
