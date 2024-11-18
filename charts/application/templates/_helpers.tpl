@@ -31,6 +31,16 @@ Create chart name and version as used by the chart label.
 {{- end }}
 
 {{/*
+Common Annotations
+*/}}
+{{- define "application.annotations" -}}
+meta.helm.sh/release-name: {{ .Release.Name | quote }}
+{{- if .Release.Namespace }}
+meta.helm.sh/release-namespace: {{ .Release.Namespace | quote }} 
+{{- end }}
+{{- end }}
+
+{{/*
 Common labels
 */}}
 {{- define "application.labels" -}}
