@@ -6,6 +6,8 @@ metadata:
   {{- if .Values.serviceMonitor.namespace }}
   namespace: {{ .Values.serviceMonitor.namespace }}
   {{- end }}
+  annotations:
+    {{- include "application.annotations" . | nindent 4 }}
   labels:
     {{- include "application.labels" . | nindent 4 }}
     {{- if .Values.serviceMonitor.labels }}
