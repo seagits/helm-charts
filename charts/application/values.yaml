@@ -235,20 +235,33 @@ ports: {}
 ingress:
 # this needs to be in sync with service.port
   enabled: false
-  className: ""
-  annotations: {}
-#   kubernetes.io/ingress.class: nginx
-#   kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: example.com
-      paths:
-        - path: /
-          pathType: Prefix
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
-
+  resources:
+    - className: ""
+      annotations: {}
+    #   kubernetes.io/ingress.class: nginx
+    #   kubernetes.io/tls-acme: "true"
+      hosts:
+        - host: example1.com
+          paths:
+            - path: /
+              pathType: Prefix
+      tls: []
+      #  - secretName: chart-example-tls
+      #    hosts:
+      #      - chart-example.local
+    - className: ""
+      annotations: {}
+    #   kubernetes.io/ingress.class: nginx
+    #   kubernetes.io/tls-acme: "true"
+      hosts:
+        - host: example2.com
+          paths:
+            - path: /
+              pathType: Prefix
+      tls: []
+      #  - secretName: chart-example-tls
+      #    hosts:
+      #      - chart-example.local
 
 autoscaling:
   enabled: false
