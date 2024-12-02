@@ -3,7 +3,7 @@
 replicaCount: 1
 
 image:
-  repository: k8s.gcr.io/pause
+  repository: registry.k8s.io/pause
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: "3.3"
