@@ -9,14 +9,14 @@
   {{- if and (.annotations) (not (hasKey .annotations "kubernetes.io/ingress.class")) }}
   {{- $_ := set .annotations "kubernetes.io/ingress.class" .className }}
   {{- end }}
-{{- end }} #eval
+{{- end }}  
 {{- if semverCompare ">=1.19-0" $gitVersion -}}
 apiVersion: networking.k8s.io/v1
 {{- else if semverCompare ">=1.14-0" $gitVersion -}}
 apiVersion: networking.k8s.io/v1beta1
 {{- else -}}
 apiVersion: extensions/v1beta1
-{{- end }} # api version
+{{- end }} 
 kind: Ingress
 metadata:
   name: {{ $fullName }}-{{ $index }}
@@ -64,5 +64,5 @@ spec:
           {{- end }}
     {{- end }}
 ---
-{{- end }} #range 
-{{- end }} #if
+{{- end }}  
+{{- end }}
