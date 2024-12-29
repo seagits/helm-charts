@@ -24,10 +24,10 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
-topologySpreadConstraints:
 # topologySpreadConstraints allows users to control how pods are spread evenly across different failure domains such as zones or nodes for improved resilience and availability.
 # matchLabels are automatically calculated for you but if you want to override and pass custom labels you could define labels under labelSelector
 # default constraint distribute pods evenly across zones
+topologySpreadConstraints:
   - maxSkew: 1
     topologyKey: topology.kubernetes.io/zone
     whenUnsatisfiable: ScheduleAnyway
@@ -39,29 +39,27 @@ topologySpreadConstraints:
   #     matchLabels:
   #       app: wikimovie-service
 
-podAnnotations: {}
 # additional annotations that you want to add to the pod
+podAnnotations: {}
 # Examples:
 # podAnnotations:
 #   key1: value1
 #   key2: value2
 
-podLabels: {}
 # additional labels that you want to add to the pod
+podLabels: {}
 # Examples:
 # podLabels:
 #   key1: value1
 #   key2: value2
-
-podSecurityContext: {}
-  # fsGroup: 2000
 # The access control settings for the whole pod.
 # https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
+podSecurityContext: {}
+  # fsGroup: 2000
 
-securityContext: {}
 # The access control settings for the main container.
 # https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
-
+securityContext: {}
 # Examples:
 # 1) To run a container in privileged mode
 # securityContext:
@@ -79,8 +77,8 @@ securityContext: {}
   # runAsNonRoot: true
   # runAsUser: 1000
 
-hostAliases: []
 # additional hosts to be added to the pod /etc/hosts
+hostAliases: []
 # Example:
 # hostAliases:
 #   - ip: 10.1.1.1
@@ -103,7 +101,6 @@ args: []
 #   - "echo"
 #   - "Hello World"
 
-startupProbe: {}
 # startupProbe is a map that specifies the startup probe of the main application container. Startup probes indicate
 # when a container application has started. If such a probe is configured, it disables liveness and readiness checks
 # until it succeeds, making sure those probes don't interfere with the application startup. This can be used to adopt
@@ -112,6 +109,7 @@ startupProbe: {}
 # https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 # NOTE: This variable is injected directly into the container spec.
 
+startupProbe: {}
 # startupProbe:
 #   httpGet:
 #     path: /
@@ -152,7 +150,6 @@ resources: {}
   #   cpu: 100m
   #   memory: 128Mi
 
-terminationGracePeriodSeconds: 30
 # terminationGracePeriodSeconds that will be used to set grace period for K8s to wait before terminating the pods of deployment.
 # specifies the amount of time Kubernetes should wait for a pod to terminate gracefully before forcibly terminating it.
 # During this period, Kubernetes sends a SIGTERM signal to the main container process, allowing it to perform cleanup tasks, close open connections, and terminate gracefully.
@@ -164,6 +161,8 @@ terminationGracePeriodSeconds: 30
 #                                                                     -> pod still serving traffic
 #                                                                     -> preStop executing (drain conns/cleanup)
 #                                                                                                                  -> SIGKILL (forced termination)
+terminationGracePeriodSeconds: 30
+
 # before shutting down, wait or delay by how many seconds (this will be overriden if lifecycleHooks is enabled and preStop is defined)
 shutdownDelaySeconds: 0
 
@@ -270,17 +269,35 @@ autoscaling:
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
 
-tolerations: []
+# This requires VPA helm chart to get installed first before setting enabled = true
+# helm repo add autoscaler https://kubernetes.github.io/autoscaler
+# helm repo update
+# helm install vpa autoscaler/vpa --namespace kube-system
+vpa:
+  enabled: false
+  updateMode: "Auto"  # Off (recommendation mode) - Auto (on running pods) - Initial (on exit or recreate)
+  containerPolicies:
+  - containerName: ""  # all containers inside pod by default
+    minAllowed:
+      cpu: 50m
+      memory: 64Mi
+    maxAllowed:
+      cpu: 256m
+      memory: 128Mi
+    controlledResources:
+    - cpu
+    - memory
+
 # Allows you to place deployments in specific nodes that were marked with taints
 # https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
+tolerations: []
 
-nodeSelector: {}
 # Allows you to place deployments in specific nodes with selector - here is an example of how to place pods in those instances that have disks of type ssd - instances of type linux - or arm64 cpu arch
 # nodeSelector:
 #   segt.io/disksize: ssd
 #   kubernetes.io/arch: arm64
 #   kubernetes.io/os: linux
-
+nodeSelector: {}
 
 affinity: {}
 # https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/
@@ -313,11 +330,10 @@ affinity: {}
     #         values:
     #         - fargate
 
-priorityClassName: ""
 # priorityClassName assigns a priorityClass to the deployment allowing pods to preempt (kick out other pods) or be preempted (being kicked out leaving resources/space for others with higher priority).
 # See https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/#priorityclass
+priorityClassName: ""
 
-customResources: {}
 
 # customResources is a map that lets you define Kubernetes resources you want installed and configured as part of this chart.
 # EXAMPLE:
@@ -338,6 +354,7 @@ customResources: {}
 #     type: Opaque
 #     data:
 #       key: c2VjcmV0VmFsdWUK
+customResources: {}
 
 serviceMonitor:
   enabled: false
@@ -345,10 +362,10 @@ serviceMonitor:
   labels: {}
   endpoints: {}
 
-podDisruptionBudget:
 # The Pod Disruption Budget (PDB) in Kubernetes allows you to control the disruption caused by voluntary disruptions like scaling down, drain, and disruption budget constraints.
 # PDB has either minAvailable or maxUnavailable but they can not go together
 # maxUnavailable: specifies the maximum number or percentage of pods that can be unavailable during voluntary disruptions. For example, you can set it to 1, meaning only one pod can be down at any given time.
 # minAvailable: specifies the minimum number or percentage of pods that should remain available during voluntary disruptions. It ensures that a certain level of redundancy is maintained even during disruptions.
+podDisruptionBudget:
   maxUnavailable: 1
 # minAvailable:
