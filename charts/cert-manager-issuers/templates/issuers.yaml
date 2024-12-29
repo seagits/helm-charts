@@ -1,0 +1,35 @@
+{{- range .Values.issuers  }}
+apiVersion: cert-manager.io/v1
+kind: {{ .kind }}
+metadata:
+  name: {{ .name | default "issuer" }}
+  {{- if eq .kind "Issuer" }}
+  {{- if .namespace }}
+  namespace: {{  .namespace }}  
+  {{- else if and (.Release) (.Release.Namespace) }}
+  namespace: {{  .Release.Namespace }}  
+  {{- else }}
+  namespace: {{  "default" }}  
+  {{- end }}
+  {{- end }}
+spec:
+{{- if and (.acme) (.acme.server) (.acme.email) }} 
+  acme:
+    server: {{ .acme.server | default "https://acme-v02.api.letsencrypt.org/directory" }}
+    email: {{ .acme.email }}
+    privateKeySecretRef:
+    {{- if and (.acme.privateKeySecretRef) (.acme.privateKeySecretRef.name) }}
+      name: {{ .acme.privateKeySecretRef.name  }}
+    {{- else }}
+      name: {{ .name }}
+    {{- end }}
+    solvers: 
+      {{- toYaml .acme.solvers | nindent 6 }}
+{{- else if and (.ca) (.ca.secretName) }} 
+  ca:
+    secretName: {{ .ca.secretName }}
+{{- else }} 
+    selfSigned: {}
+{{- end }}
+---
+{{- end }}
