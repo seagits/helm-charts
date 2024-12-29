@@ -2,9 +2,9 @@ apiVersion: v2
 name: application
 description: A Helm chart for deploying a highly available and scalable application in Kubernetes clusters
 type: application
-version: 0.8.4
+version: 0.8.5
 appVersion: "stable-alpine3.17-slim"
 maintainers:
 - name: Seagit
   email: contact@seagit.com
-  url: https://seagit.com
+  url: https://charts.seagit.com

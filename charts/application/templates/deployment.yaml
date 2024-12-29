@@ -123,7 +123,6 @@ spec:
               {{- toYaml .Values.lifecycleHooks.preStop | nindent 14 }}
             {{- else if gt (int .Values.shutdownDelaySeconds) 0 }}
             # Include a preStop hook with a shutdown delay for eventual consistency reasons.
-            # See https://blog.gruntwork.io/delaying-shutdown-to-wait-for-pod-deletion-propagation-445f779a8304
             preStop:
               exec:
                 command:
