@@ -275,18 +275,18 @@ autoscaling:
 # helm install vpa autoscaler/vpa --namespace kube-system
 vpa:
   enabled: false
-  updateMode: "Auto" #Off (recommendation mode) - Auto (on running pods) - Initial (on exit or recreate)
+  updateMode: "Auto"  # Off (recommendation mode) - Auto (on running pods) - Initial (on exit or recreate)
   containerPolicies: 
-  - containerName: "" #all containers inside pod by default 
-    minAllowed: 
+  - containerName: ""  # all containers inside pod by default
+    minAllowed:
       cpu: 50m
       memory: 64Mi
-    maxAllowed: 
+    maxAllowed:
       cpu: 256m
       memory: 128Mi
-    controlledResources: 
+    controlledResources:
     - cpu
-    - memory 
+    - memory
 
 # Allows you to place deployments in specific nodes that were marked with taints
 # https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/
