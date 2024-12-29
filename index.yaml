@@ -197,4 +197,19 @@ entries:
     urls:
     - https://github.com/seagits/helm-charts/releases/download/ca-overprovisioner-0.1.0/ca-overprovisioner-0.1.0.tgz
     version: 0.1.0
-generated: "2024-12-29T16:57:04.322017123Z"
+  cert-manager-issuers:
+  - apiVersion: v2
+    appVersion: 0.1.0
+    created: "2024-12-29T17:33:11.041274492Z"
+    description: Create list of cert manager Issuers
+    digest: 429119d9d5df928f80a6967693543652afb46aea8fad994190927dc51e21e8a9
+    maintainers:
+    - email: contact@seagit.com
+      name: Seagit
+      url: https://charts.seagit.com
+    name: cert-manager-issuers
+    type: application
+    urls:
+    - https://github.com/seagits/helm-charts/releases/download/cert-manager-issuers-0.1.0/cert-manager-issuers-0.1.0.tgz
+    version: 0.1.0
+generated: "2024-12-29T17:33:11.041311371Z"
