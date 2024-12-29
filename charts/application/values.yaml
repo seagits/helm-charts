@@ -269,7 +269,7 @@ autoscaling:
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
 
-# this requires VPA helm chart to get installed first before turning this ON
+# This requires VPA helm chart to get installed first before setting enabled = true
 # helm repo add autoscaler https://kubernetes.github.io/autoscaler
 # helm repo update
 # helm install vpa autoscaler/vpa --namespace kube-system
