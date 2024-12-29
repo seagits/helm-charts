@@ -276,7 +276,7 @@ autoscaling:
 vpa:
   enabled: false
   updateMode: "Auto"  # Off (recommendation mode) - Auto (on running pods) - Initial (on exit or recreate)
-  containerPolicies: 
+  containerPolicies:
   - containerName: ""  # all containers inside pod by default
     minAllowed:
       cpu: 50m
