@@ -19,8 +19,8 @@ issuers:
         # - http01:
         #     ingress:
         #       ingressClassName: nginx
-    #certificate authority provided secret values (expected data: ca.crt - tls.key - tls.crt)
+    # certificate authority provided secret values (expected data: ca.crt - tls.key - tls.crt)
     ca:
       secretName: ""
-    #self signed certificate
+    # self signed certificate
     selfSigned: {}
