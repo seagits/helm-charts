@@ -87,7 +87,17 @@ hostAliases: []
 #       - bar.example.com
 
 dnsPolicy: {}
-initContainers: {}
+# dnsPolicy: ClusterFirst
+
+initContainers: []
+# initContainers are specialized containers that run before the main application container in a pod. 
+# They are used to perform initialization tasks, such as setting up dependencies, preparing data, or configuring the environment.
+  # - name: init-setup
+  #   image: busybox
+  #   command: ["sh", "-c", "echo hello"]
+  #   volumeMounts:
+  #     - name: data
+  #       mountPath: /init
 
 # List of strings to pass to the main container (CMD) - Entry point of the container
 command: []
