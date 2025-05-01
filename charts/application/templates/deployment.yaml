@@ -42,14 +42,20 @@ spec:
       {{- if .Values.dnsPolicy }}
       dnsPolicy: {{ .Values.dnsPolicy }}
       {{- end }}
-
       {{- if .Values.initContainers }}
       initContainers:
-      {{ toYaml .Values.initContainers | nindent 8 }}
+        {{ toYaml .Values.initContainers | nindent 8 }}
       {{- end }}
       
+      volumes:
+      {{- toYaml .Values.volumes | nindent 8 }}
+
       containers:
         - name: {{ .Chart.Name }}
+          
+          volumeMounts:
+          {{- toYaml .Values.volumeMounts | nindent 12 }}
+
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           
