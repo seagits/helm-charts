@@ -52,10 +52,14 @@ podLabels: {}
 # podLabels:
 #   key1: value1
 #   key2: value2
-# The access control settings for the whole pod.
+
+# podSecurityContext controls the access settings for the whole pod.
 # https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
 podSecurityContext: {}
   # fsGroup: 2000
+  # runAsGroup: 1000
+  # runAsNonRoot: true
+  # runAsUser: 1000
 
 # The access control settings for the main container.
 # https://kubernetes.io/docs/tasks/configure-pod-container/security-context/
@@ -87,7 +91,67 @@ hostAliases: []
 #       - bar.example.com
 
 dnsPolicy: {}
-initContainers: {}
+# dnsPolicy: ClusterFirst
+
+volumes: []
+# volumes are used to define the volumes that will be mounted into the pod. This is useful for sharing data between containers or persisting data.
+# Example:
+# volumes:
+#   - name: data
+#     emptyDir: {}
+#   - name: data
+#     persistentVolumeClaim:
+#       claimName: data-pvc
+#   - name: data
+#     configMap:
+#       name: data-configmap
+#   - name: data
+#     secret:
+#       secretName: data-secret
+#   - name: data
+#     hostPath: /data
+#   - name: data
+#     gcePersistentDisk:
+#       pdName: data-pd
+#   - name: data
+#     awsElasticBlockStore:
+#       volumeID: data-volume
+#   - name: data
+#     azureDisk:
+#       diskName: data-disk
+
+volumeMounts: []
+# volumeMounts are used to define the mount points for the volumes in the container. This is where the volumes will be accessible inside the container.
+# Example:
+# volumeMounts:
+#   - name: data
+#     mountPath: /data
+#     subPath: data
+#   - name: data
+#     mountPath: /data
+#     defaultMode: 0755
+
+initContainers: []
+# initContainers are specialized containers that run before the main application container in a pod.
+# They are used to perform initialization tasks, such as setting up dependencies, preparing data, or configuring the environment.
+  # - name: init-setup
+  #   image: busybox
+  #   command: ["sh", "-c", "echo hello"]
+  #   volumeMounts:
+  #      - name: data
+  #        mountPath: /init
+  #   securityContext:
+  #     runAsUser: 1000
+  #     runAsGroup: 3000
+  #     readOnlyRootFilesystem: true
+  #     allowPrivilegeEscalation: false
+  #   resources:
+  #     requests:
+  #       cpu: 50m
+  #       memory: 64Mi
+  #     limits:
+  #       cpu: 100m
+  #       memory: 128Mi
 
 # List of strings to pass to the main container (CMD) - Entry point of the container
 command: []
@@ -265,7 +329,7 @@ ingress:
 autoscaling:
   enabled: false
   minReplicas: 1
-  maxReplicas: 10
+  maxReplicas: 1000
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
 
