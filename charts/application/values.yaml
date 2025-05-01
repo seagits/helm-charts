@@ -132,7 +132,7 @@ volumeMounts: []
 #     defaultMode: 0755
 
 initContainers: []
-# initContainers are specialized containers that run before the main application container in a pod. 
+# initContainers are specialized containers that run before the main application container in a pod.
 # They are used to perform initialization tasks, such as setting up dependencies, preparing data, or configuring the environment.
   # - name: init-setup
   #   image: busybox
