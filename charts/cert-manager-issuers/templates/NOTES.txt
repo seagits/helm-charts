@@ -1,0 +1,9 @@
+Get the Issuers by running these commands:
+
+{{- range .Values.issuers  }}
+{{- if eq .kind "Issuer" }}
+kubectl get --namespace {{ .namespace }} issuer {{ .name }}
+{{- else }}
+kubectl get clusterissuer {{ .name }}
+{{- end }}
+{{- end }}
