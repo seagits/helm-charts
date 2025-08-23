@@ -91,22 +91,10 @@ spec:
           {{- end }}
 
           livenessProbe:
-          {{- if .Values.livenessProbe }}
             {{- toYaml .Values.livenessProbe | nindent 12 }}
-          {{- else }}
-            httpGet:
-              path: /
-              port: http
-          {{- end }}
 
           readinessProbe:
-          {{- if .Values.readinessProbe }}
             {{- toYaml .Values.readinessProbe | nindent 12 }}
-          {{- else }}
-            httpGet:
-              path: /
-              port: http
-          {{- end }}
           
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
