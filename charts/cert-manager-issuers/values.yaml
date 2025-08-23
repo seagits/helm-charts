@@ -1,0 +1,26 @@
+# Default values for cert-manager-issuers.
+
+# This expects list of Issuers to be created for cert manager to use to issue certificates
+issuers:
+  - name: letsencrypt-staging
+    # can be "Issuer" or "ClusterIssuer"
+    kind: Issuer
+    namespace: "default"  # will be used only when the issuer's kind is "Issuer"
+    # Issuer types can be "acme" - "ca" - or "selfSigned" (todo: more to be added)
+    acme:
+      # The ACME server URL e.g. https://acme-staging-v02.api.letsencrypt.org/directory
+      server: ""
+      # Email address used for ACME registration e.g. admin@example.com
+      email: ""
+      # optional: if not set, defaulted to the name of the Issuer
+      privateKeySecretRef:
+        name: ""
+      solvers: []
+        # - http01:
+        #     ingress:
+        #       ingressClassName: nginx
+    # certificate authority provided secret values (expected data: ca.crt - tls.key - tls.crt)
+    ca:
+      secretName: ""
+    # self signed certificate
+    selfSigned: {}

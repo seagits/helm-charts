@@ -1,0 +1,36 @@
+{{- if .Values.vpa.enabled }}
+{{- if semverCompare ">=1.21.0" .Capabilities.KubeVersion.GitVersion }}
+apiVersion: autoscaling.k8s.io/v1
+{{- else }}
+apiVersion: autoscaling.k8s.io/v1beta2
+{{- end }}
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ include "application.fullname" . }}
+  annotations:
+    {{- include "application.annotations" . | nindent 4 }}
+  labels:
+    {{- include "application.labels" . | nindent 4 }}
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "application.fullname" . }}
+  updatePolicy: 
+    updateMode: "{{ .Values.vpa.updateMode | default "Off" }}"
+  resourcePolicy:
+    containerPolicies:
+      {{- range .Values.vpa.containerPolicies }}
+      - containerName: {{ .containerName | default "*" | quote }}
+        minAllowed:
+          cpu: {{ .minAllowed.cpu | quote }}
+          memory: {{ .minAllowed.memory | quote }}
+        maxAllowed:
+          cpu: {{ .maxAllowed.cpu | quote }}
+          memory: {{ .maxAllowed.memory | quote }}
+        controlledResources:
+          {{- range .controlledResources }}
+          - {{ . | quote }}
+          {{- end }}
+      {{- end }}
+{{- end }}
