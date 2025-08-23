@@ -119,11 +119,11 @@ startupProbe: {}
 #   failureThreshold: 30
 #   periodSeconds: 10
 
-readinessProbe: 
+readinessProbe:
   httpGet:
     path: /
     port: http
-livenessProbe: 
+livenessProbe:
   httpGet:
     path: /
     port: http
