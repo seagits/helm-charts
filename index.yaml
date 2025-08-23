@@ -3,6 +3,21 @@ entries:
   application:
   - apiVersion: v2
     appVersion: stable-alpine3.17-slim
+    created: "2025-08-23T02:18:49.01443387Z"
+    description: A Helm chart for deploying a highly available and scalable application
+      in Kubernetes clusters
+    digest: 79ac3501a3647ee3d436337fcf32cfb736032c8090f7cb5d70da4d46fb8a435d
+    maintainers:
+    - email: contact@seagit.com
+      name: Seagit
+      url: https://charts.seagit.com
+    name: application
+    type: application
+    urls:
+    - https://github.com/seagits/helm-charts/releases/download/application-0.8.8/application-0.8.8.tgz
+    version: 0.8.8
+  - apiVersion: v2
+    appVersion: stable-alpine3.17-slim
     created: "2025-08-23T01:26:31.303989414Z"
     description: A Helm chart for deploying a highly available and scalable application
       in Kubernetes clusters
@@ -242,4 +257,4 @@ entries:
     urls:
     - https://github.com/seagits/helm-charts/releases/download/cert-manager-issuers-0.1.0/cert-manager-issuers-0.1.0.tgz
     version: 0.1.0
-generated: "2025-08-23T01:26:31.304088028Z"
+generated: "2025-08-23T02:18:49.014538275Z"
