@@ -180,15 +180,10 @@ startupProbe: {}
 #     port: http
 #   failureThreshold: 30
 #   periodSeconds: 10
+# Override readinessProbe or set to {} to disable (if set here it will get merged to whatever is being customized with)
+readinessProbe: {}
 
-readinessProbe:
-  httpGet:
-    path: /
-    port: http
-livenessProbe:
-  httpGet:
-    path: /
-    port: http
+livenessProbe: {}
 # livenessProbe is a map that specifies the liveness probe of the main application container. Liveness probes indicate
 # when a container has reached a fatal state where it needs to be restarted to recover. When the liveness probe fails,
 # the container is automatically recreated. You can read more about container liveness probes in the official docs:
