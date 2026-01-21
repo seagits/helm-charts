@@ -4,6 +4,16 @@ fullnameOverride: ""
 
 replicaCount: 2
 
+# deploymentStrategy defines how pods are replaced when a deployment is updated.
+# type can be "RollingUpdate" or "Recreate"
+# RollingUpdate: gradually replaces old pods with new ones
+# Recreate: terminates all existing pods before creating new ones
+deploymentStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1          # maximum number of pods that can be created above the desired number
+    maxUnavailable: 0    # maximum number of pods that can be unavailable during the update
+
 image:
   repository: nginx
   pullPolicy: IfNotPresent
