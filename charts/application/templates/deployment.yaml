@@ -19,6 +19,12 @@ spec:
       maxSurge: {{ .Values.deploymentStrategy.rollingUpdate.maxSurge }}
       maxUnavailable: {{ .Values.deploymentStrategy.rollingUpdate.maxUnavailable }}
     {{- end }}
+  {{- if .Values.deploymentStrategy.minReadySeconds }}
+  minReadySeconds: {{ .Values.deploymentStrategy.minReadySeconds }}
+  {{- end }}
+  {{- if .Values.deploymentStrategy.progressDeadlineSeconds }}
+  progressDeadlineSeconds: {{ .Values.deploymentStrategy.progressDeadlineSeconds }}
+  {{- end }}
   {{- end }}
   selector:
     matchLabels:
