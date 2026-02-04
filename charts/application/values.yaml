@@ -8,17 +8,42 @@ replicaCount: 2
 # type can be "RollingUpdate" or "Recreate"
 # RollingUpdate: gradually replaces old pods with new ones
 # Recreate: terminates all existing pods before creating new ones
+# minReadySeconds: minimum seconds a pod should be ready without crashing before considered available
+# a pod is considered available immediately as soon as its readiness probe passes.
+# Setting minReadySeconds: 30 (for example) means the pod must stay ready for 30 seconds continuously before being considered available. This is useful when:
+# Your app might pass the readiness probe initially but crash shortly after (e.g., during lazy initialization)
+# minReadySeconds: 0 → Pod passes readiness → Immediately available → Old pod terminated
+# minReadySeconds: 30 → Pod passes readiness → Wait 30s → If still ready, available → Old pod terminated
+# progressDeadlineSeconds: maximum time for a deployment to make progress before considered failed
+# means Kubernetes will wait 600 seconds (10 minutes) for the deployment to make progress before marking it as failed.
+# What counts as "progress":
+# A new pod becomes ready
+# An old pod is successfully terminated
+# Any forward movement in the rollout
+# The deployment's status condition is set to Progressing=False with reason ProgressDeadlineExceeded
+# The rollout is considered stalled/failed
+# Common scenarios that trigger this:
+# Pods stuck in Pending (no node resources available)
+# Pods crash-looping and never becoming ready
+# Readiness probes continuously failing
+# Image pull failures
+# Typical values:
+# Default in Kubernetes is 600 (10 minutes)
+# For fast-starting apps: 120-300 seconds
+# For slow-starting apps (JVM, ML models): 900-1800 seconds
 deploymentStrategy:
   type: RollingUpdate
   rollingUpdate:
     maxSurge: 1          # maximum number of pods that can be created above the desired number
     maxUnavailable: 0    # maximum number of pods that can be unavailable during the update
+  minReadySeconds: 0
+  progressDeadlineSeconds: 300
 
 image:
   repository: nginx
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  tag: "1.28-alpine3.23-slim"
 
 imagePullSecrets: []
 # imagePullSecrets:
