@@ -1,3 +1,4 @@
+{{- if and .Values.uploads.bucket (not .Values.existingServiceAccount) }}{{ fail "uploads.bucket requires existingServiceAccount" }}{{- end }}
 {{- range .Values.sources }}
 {{- if has (.mode | default "once") (list "schedule" "both") }}
 ---
@@ -17,4 +18,22 @@ spec:
       activeDeadlineSeconds: {{ $.Values.activeDeadlineSeconds }}
       template: {{- include "rag-sync.podTemplate" (dict "root" $ "src" .) | nindent 8 }}
 {{- end }}
+{{- end }}
+{{- if .Values.uploads.bucket }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "rag-sync.fitName" (dict "name" (printf "%s-cron-uploads" .Release.Name) "max" 52) }}
+  labels: {{- include "rag-sync.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.uploads.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds }}
+      template: {{- include "rag-sync.podTemplate" (dict "root" . "src" (dict "id" "uploads") "uploads" true) | nindent 8 }}
 {{- end }}
