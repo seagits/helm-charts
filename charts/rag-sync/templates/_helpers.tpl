@@ -4,8 +4,23 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
+{{- define "rag-sync.validateSourceId" -}}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]{0,38}[a-z0-9])?$" .id) -}}
+{{- fail (printf "source id %q must match DNS-1123 label format: ^[a-z0-9]([-a-z0-9]{0,38}[a-z0-9])?$" .id) -}}
+{{- end -}}
+{{- end }}
+
 {{- define "rag-sync.sourceJson" -}}
+{{- include "rag-sync.validateSourceId" . -}}
 {{- dict "id" .id "bucket" .bucket "prefix" (.prefix | default "") "extensions" (.extensions | default list) "mirror_deletes" (.mirrorDeletes | default false) | toJson -}}
+{{- end }}
+
+{{- define "rag-sync.contentHash" -}}
+{{- $root := .root -}}{{- $s := .src -}}
+{{- $sourceJson := include "rag-sync.sourceJson" $s -}}
+{{- $content := printf "%s%s:%s%s" $sourceJson $root.Values.image.repository $root.Values.image.tag $root.Values.ragApiUrl -}}
+{{- $hash := $content | sha256sum -}}
+{{- $hash | trunc 8 -}}
 {{- end }}
 
 {{- define "rag-sync.podSpec" -}}

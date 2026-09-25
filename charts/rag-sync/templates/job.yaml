@@ -4,7 +4,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ $.Release.Name }}-once-{{ .id }}
+  name: {{ $.Release.Name }}-once-{{ .id }}-{{ include "rag-sync.contentHash" (dict "root" $ "src" .) }}
   labels: {{- include "rag-sync.labels" $ | nindent 4 }}
 spec:
   backoffLimit: 2

@@ -19,5 +19,19 @@ shared=$(helm template t "$chart" --set ragApiUrl=http://x --set serviceTokenSec
   --set-json 'sources=[{"id":"docs","bucket":"b1","mode":"once"}]')
 [ "$(grep -c '^kind: ServiceAccount$' <<<"$shared")" = 0 ] || fail "existingServiceAccount => no SAs rendered"
 grep -q 'serviceAccountName: k8s-c-abc' <<<"$shared" || fail "pods must use existingServiceAccount"
+# Test: invalid source id must fail
+helm template t "$chart" --set ragApiUrl=http://x --set serviceTokenSecret.name=s \
+  --set-json 'sources=[{"id":"My_Source","bucket":"b1","mode":"once"}]' >/dev/null 2>&1 && fail "invalid id My_Source should fail"
+# Test: Job name includes content hash (8 hex chars)
+grep -q 'name: t-once-docs-[0-9a-f]\{8\}' <<<"$out" || fail "Job name must include 8-char content hash"
+# Test: changing image tag changes Job name hash
+out2=$(helm template t "$chart" \
+  --set ragApiUrl=http://api.apps.svc.cluster.local:8000 \
+  --set serviceTokenSecret.name=rag-secrets \
+  --set image.tag=0.2.0 \
+  --set-json 'sources=[{"id":"docs","bucket":"b1","prefix":"kb/","mode":"both","schedule":"*/30 * * * *","roleArn":"arn:aws:iam::1:role/r-docs","mirrorDeletes":true},{"id":"faq","bucket":"b2","mode":"once"}]')
+job_name_1=$(grep 'name: t-once-docs-' <<<"$out" | head -1 | sed 's/.*name: //;s/ *$//')
+job_name_2=$(grep 'name: t-once-docs-' <<<"$out2" | head -1 | sed 's/.*name: //;s/ *$//')
+[ "$job_name_1" != "$job_name_2" ] || fail "changing image.tag should change Job name hash"
 helm lint "$chart" >/dev/null || fail "helm lint"
 echo "rag-sync render OK"
