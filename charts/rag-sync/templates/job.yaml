@@ -4,14 +4,12 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ $.Release.Name }}-once-{{ .id }}-{{ include "rag-sync.contentHash" (dict "root" $ "src" .) }}
+  name: {{ include "rag-sync.jobName" (dict "root" $ "src" .) }}
   labels: {{- include "rag-sync.labels" $ | nindent 4 }}
 spec:
   backoffLimit: 2
+  activeDeadlineSeconds: {{ $.Values.activeDeadlineSeconds }}
   ttlSecondsAfterFinished: 86400
-  template:
-    metadata:
-      labels: {{- include "rag-sync.labels" $ | nindent 8 }}
-    spec: {{- include "rag-sync.podSpec" (dict "root" $ "src" .) | nindent 6 }}
+  template: {{- include "rag-sync.podTemplate" (dict "root" $ "src" .) | nindent 4 }}
 {{- end }}
 {{- end }}
