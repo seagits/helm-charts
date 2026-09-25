@@ -1,0 +1,33 @@
+image:
+  repository: public.ecr.aws/q6s1l7f2/sg-rag-api
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+ragApiUrl: ""  # http://<rag-api svc>:8000  (${stack.rag-api.svc})
+
+serviceTokenSecret:
+  name: ""
+  key: SERVICE_TOKEN
+
+existingServiceAccount: ""  # when set: no per-source SAs; every job runs as this SA (the stack uses
+                            # rag-api's IRSA SA, whose Instance Access grants carry s3 read per source)
+
+awsRegion: us-east-1
+
+activeDeadlineSeconds: 3600  # hard cap on one sync run (Job and each CronJob-created Job)
+
+nodeSelector: {}
+
+tolerations: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+sources: []  # each: { id (DNS-1123 label: ^[a-z0-9]([-a-z0-9]{0,38}[a-z0-9])?$),
+             #         bucket, prefix, extensions: [], mirrorDeletes: false,
+             #         mode: once|schedule|both, schedule: "0 * * * *", roleArn: "" }
