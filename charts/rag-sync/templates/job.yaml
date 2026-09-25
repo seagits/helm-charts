@@ -1,0 +1,17 @@
+{{- range .Values.sources }}
+{{- if has (.mode | default "once") (list "once" "both") }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $.Release.Name }}-once-{{ .id }}
+  labels: {{- include "rag-sync.labels" $ | nindent 4 }}
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: {{- include "rag-sync.labels" $ | nindent 8 }}
+    spec: {{- include "rag-sync.podSpec" (dict "root" $ "src" .) | nindent 6 }}
+{{- end }}
+{{- end }}

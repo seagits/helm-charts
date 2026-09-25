@@ -1,0 +1,22 @@
+{{- range .Values.sources }}
+{{- if has (.mode | default "once") (list "schedule" "both") }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $.Release.Name }}-cron-{{ .id }}
+  labels: {{- include "rag-sync.labels" $ | nindent 4 }}
+spec:
+  schedule: {{ required "schedule is required for mode schedule/both" .schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels: {{- include "rag-sync.labels" $ | nindent 12 }}
+        spec: {{- include "rag-sync.podSpec" (dict "root" $ "src" .) | nindent 10 }}
+{{- end }}
+{{- end }}
