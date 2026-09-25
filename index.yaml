@@ -287,4 +287,19 @@ entries:
     urls:
     - https://github.com/seagits/helm-charts/releases/download/cert-manager-issuers-0.1.0/cert-manager-issuers-0.1.0.tgz
     version: 0.1.0
-generated: "2026-02-04T04:14:10.858827415Z"
+  rag-sync:
+  - apiVersion: v2
+    appVersion: 0.1.0
+    created: "2026-09-25T13:35:38.256864596Z"
+    description: Seagit RAG stack — one Job/CronJob per S3 data source feeding rag-api
+    digest: 395e7132cac51f5db48f5f018970d60835469163da9b3a2eba02498c70761df7
+    maintainers:
+    - email: contact@seagit.com
+      name: Seagit
+      url: https://charts.seagit.com
+    name: rag-sync
+    type: application
+    urls:
+    - https://github.com/seagits/helm-charts/releases/download/rag-sync-0.1.0/rag-sync-0.1.0.tgz
+    version: 0.1.0
+generated: "2026-09-25T13:35:38.256930429Z"
