@@ -2,8 +2,8 @@ apiVersion: v2
 name: rag-sync
 description: Seagit RAG stack — one Job/CronJob per S3 data source feeding rag-api
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.2.0
+appVersion: "0.1.3"
 maintainers:
 - name: Seagit
   email: contact@seagit.com

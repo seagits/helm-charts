@@ -34,6 +34,14 @@ appends an 11-char suffix to the Jobs it creates).
 {{- end }}
 
 {{/*
+The `uploads` SOURCE_JSON: bypasses validateSourceId (the one place "uploads" is allowed) and
+always mirrors deletes, since the shared bucket is the sole source of truth for uploaded files.
+*/}}
+{{- define "rag-sync.uploadsSourceJson" -}}
+{{- dict "id" "uploads" "bucket" .Values.uploads.bucket "prefix" (.Values.uploads.prefix | default "uploads/") "extensions" list "mirror_deletes" true | toJson -}}
+{{- end }}
+
+{{/*
 Job name: <release>-once-<id>-<hash8>, hash8 = sha256 of the rendered pod template. A Job's
 pod template is immutable, so any change to it (image, env, SA, region, secret, resources,
 securityContext, ...) must yield a new Job name; identical values keep the name stable.
@@ -75,7 +83,7 @@ containers:
     command: ["python", "-m", "rag_api.sync"]
     env:
       - name: SOURCE_JSON
-        value: {{ include "rag-sync.sourceJson" $s | quote }}
+        value: {{ if .uploads }}{{ include "rag-sync.uploadsSourceJson" $root | quote }}{{ else }}{{ include "rag-sync.sourceJson" $s | quote }}{{ end }}
       - name: RAG_API_URL
         value: {{ required "ragApiUrl is required" $root.Values.ragApiUrl | quote }}
       - name: AWS_REGION
@@ -85,6 +93,10 @@ containers:
           secretKeyRef:
             name: {{ required "serviceTokenSecret.name is required" $root.Values.serviceTokenSecret.name }}
             key: {{ $root.Values.serviceTokenSecret.key }}
+{{- if .uploads }}
+      - name: SYNC_UPLOADS
+        value: "1"
+{{- end }}
     resources: {{- toYaml $root.Values.resources | nindent 6 }}
     securityContext:
       allowPrivilegeEscalation: false

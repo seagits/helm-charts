@@ -1,6 +1,6 @@
 image:
   repository: public.ecr.aws/q6s1l7f2/sg-rag-api
-  tag: "0.1.0"
+  tag: "0.1.3"
   pullPolicy: IfNotPresent
 
 ragApiUrl: ""  # http://<rag-api svc>:8000  (${stack.rag-api.svc})
@@ -31,3 +31,10 @@ resources:
 sources: []  # each: { id (DNS-1123 label: ^[a-z0-9]([-a-z0-9]{0,38}[a-z0-9])?$),
              #         bucket, prefix, extensions: [], mirrorDeletes: false,
              #         mode: once|schedule|both, schedule: "0 * * * *", roleArn: "" }
+
+# Multi-cluster stacks (P5): the shared uploads bucket, ingested by this cluster every 5 min as the
+# reserved `uploads` source (rag-api must run UPLOADS_MODE=bucket-only). Empty bucket = no job.
+uploads:
+  bucket: ""
+  prefix: "uploads/"
+  schedule: "*/5 * * * *"

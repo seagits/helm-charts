@@ -88,4 +88,26 @@ done
 helm template t "$chart" "${base_args[@]}" --set activeDeadlineSeconds=600 | grep -q 'activeDeadlineSeconds: 600' || fail "activeDeadlineSeconds must be a value"
 
 helm lint "$chart" >/dev/null || fail "helm lint"
+
+# --- P5 Task 6: ingest-uploads CronJob for the shared multi-cluster uploads bucket ---
+# ingest-uploads (P5): bucket set => one extra CronJob, flagged, mirror deletes on
+up=$(helm template t "$chart" --set ragApiUrl=http://x --set serviceTokenSecret.name=s \
+  --set existingServiceAccount=k8s-c-abc --set uploads.bucket=dev-rag-a1b2c3)
+[ "$(grep -c '^kind: CronJob$' <<<"$up")" = 1 ] || fail "uploads bucket => exactly one CronJob"
+grep -q 'name: t-cron-uploads' <<<"$up" || fail "uploads CronJob name"
+grep -q 'schedule: "\*/5 \* \* \* \*"' <<<"$up" || fail "default uploads schedule */5"
+grep -q 'name: SYNC_UPLOADS' <<<"$up" || fail "uploads job must set SYNC_UPLOADS"
+grep -q '\\"id\\":\\"uploads\\"' <<<"$up" || fail "SOURCE_JSON id uploads"
+grep -q '\\"prefix\\":\\"uploads/\\"' <<<"$up" || fail "default prefix uploads/"
+grep -q '\\"mirror_deletes\\":true' <<<"$up" || fail "uploads mirror deletes"
+# no bucket => no uploads CronJob, and user sources still may not be named uploads
+[ "$(helm template t "$chart" --set ragApiUrl=http://x --set serviceTokenSecret.name=s | grep -c 'cron-uploads')" = 0 ] || fail "no bucket => no uploads CronJob"
+helm template t "$chart" --set ragApiUrl=http://x --set serviceTokenSecret.name=s \
+  --set-json 'sources=[{"id":"uploads","bucket":"b1","mode":"once"}]' >/dev/null 2>&1 && fail "user source id uploads must still fail"
+# user sources must NOT carry SYNC_UPLOADS
+[ "$(grep -c 'SYNC_UPLOADS' <<<"$out")" = 0 ] || fail "user source jobs must not set SYNC_UPLOADS"
+# uploads.bucket without existingServiceAccount must fail fast (no per-source SA named uploads exists)
+helm template t "$chart" --set ragApiUrl=http://x --set serviceTokenSecret.name=s \
+  --set uploads.bucket=dev-rag-a1b2c3 >/dev/null 2>&1 && fail "uploads.bucket requires existingServiceAccount"
+
 echo "rag-sync render OK"
