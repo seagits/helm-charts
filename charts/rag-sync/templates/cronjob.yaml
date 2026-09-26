@@ -27,7 +27,7 @@ metadata:
   name: {{ include "rag-sync.fitName" (dict "name" (printf "%s-cron-uploads" .Release.Name) "max" 52) }}
   labels: {{- include "rag-sync.labels" . | nindent 4 }}
 spec:
-  schedule: {{ .Values.uploads.schedule | quote }}
+  schedule: {{ if .Values.uploads.queueUrl }}{{ .Values.uploads.safetySchedule | quote }}{{ else }}{{ .Values.uploads.schedule | quote }}{{ end }}
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3

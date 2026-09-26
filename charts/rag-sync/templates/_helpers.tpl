@@ -61,10 +61,18 @@ metadata:
 spec: {{- include "rag-sync.podSpec" . | nindent 2 }}
 {{- end }}
 
+{{/*
+Shared pod/container fields for every rag-sync pod (sync Jobs/CronJobs and the uploads-events
+consumer Deployment): serviceAccountName, hardened pod+container securityContext, nodeSelector,
+tolerations, image, resources and the /tmp emptyDir. Callers select the workload-specific bits
+(restartPolicy, command, env) around this include.
+Params: .root, .src (needs .id; used only for the per-source SA name fallback), .restartPolicy
+(default "Never").
+*/}}
 {{- define "rag-sync.podSpec" -}}
 {{- $root := .root -}}{{- $s := .src -}}
 serviceAccountName: {{ $root.Values.existingServiceAccount | default (printf "%s-src-%s" $root.Release.Name $s.id) }}
-restartPolicy: Never
+restartPolicy: {{ .restartPolicy | default "Never" }}
 securityContext:
   runAsNonRoot: true
   runAsUser: 10001
@@ -77,13 +85,22 @@ nodeSelector: {{- toYaml . | nindent 2 }}
 tolerations: {{- toYaml . | nindent 2 }}
 {{- end }}
 containers:
-  - name: sync
+  - name: {{ if .events }}events{{ else }}sync{{ end }}
     image: "{{ $root.Values.image.repository }}:{{ $root.Values.image.tag }}"
     imagePullPolicy: {{ $root.Values.image.pullPolicy }}
+{{- if .events }}
+    command: ["python", "-m", "rag_api.events"]
+{{- else }}
     command: ["python", "-m", "rag_api.sync"]
+{{- end }}
     env:
+{{- if .events }}
+      - name: QUEUE_URL
+        value: {{ required "uploads.queueUrl is required" $root.Values.uploads.queueUrl | quote }}
+{{- else }}
       - name: SOURCE_JSON
         value: {{ if .uploads }}{{ include "rag-sync.uploadsSourceJson" $root | quote }}{{ else }}{{ include "rag-sync.sourceJson" $s | quote }}{{ end }}
+{{- end }}
       - name: RAG_API_URL
         value: {{ required "ragApiUrl is required" $root.Values.ragApiUrl | quote }}
       - name: AWS_REGION
