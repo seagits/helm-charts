@@ -289,6 +289,20 @@ entries:
     version: 0.1.0
   rag-sync:
   - apiVersion: v2
+    appVersion: 0.1.4
+    created: "2026-09-26T03:38:14.469247194Z"
+    description: Seagit RAG stack — one Job/CronJob per S3 data source feeding rag-api
+    digest: 287e6f81bc737519528296818c32dd54d1e8449cdd19a44b740814c706543ec6
+    maintainers:
+    - email: contact@seagit.com
+      name: Seagit
+      url: https://charts.seagit.com
+    name: rag-sync
+    type: application
+    urls:
+    - https://github.com/seagits/helm-charts/releases/download/rag-sync-0.3.0/rag-sync-0.3.0.tgz
+    version: 0.3.0
+  - apiVersion: v2
     appVersion: 0.1.3
     created: "2026-09-26T00:23:40.821758266Z"
     description: Seagit RAG stack — one Job/CronJob per S3 data source feeding rag-api
@@ -316,4 +330,4 @@ entries:
     urls:
     - https://github.com/seagits/helm-charts/releases/download/rag-sync-0.1.0/rag-sync-0.1.0.tgz
     version: 0.1.0
-generated: "2026-09-26T00:23:40.821806146Z"
+generated: "2026-09-26T03:38:14.469294002Z"
