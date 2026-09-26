@@ -9,6 +9,13 @@ metadata:
 spec:
   replicas: 1
   selector:
-    matchLabels: {{- include "rag-sync.labels" . | nindent 6 }}
-  template: {{- include "rag-sync.podTemplate" (dict "root" . "src" (dict "id" "uploads-events") "events" true "restartPolicy" "Always") | nindent 4 }}
+    matchLabels:
+      {{- include "rag-sync.labels" . | nindent 6 }}
+      app.kubernetes.io/component: uploads-events
+  template:
+    metadata:
+      labels:
+        {{- include "rag-sync.labels" . | nindent 8 }}
+        app.kubernetes.io/component: uploads-events
+    spec: {{- include "rag-sync.podSpec" (dict "root" . "src" (dict "id" "uploads-events") "events" true "restartPolicy" "Always") | nindent 6 }}
 {{- end }}
