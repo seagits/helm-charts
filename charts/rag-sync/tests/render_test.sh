@@ -110,4 +110,28 @@ helm template t "$chart" --set ragApiUrl=http://x --set serviceTokenSecret.name=
 helm template t "$chart" --set ragApiUrl=http://x --set serviceTokenSecret.name=s \
   --set uploads.bucket=dev-rag-a1b2c3 >/dev/null 2>&1 && fail "uploads.bucket requires existingServiceAccount"
 
+# --- P5.1 Task 6: uploads-events consumer Deployment + hourly safety-net schedule ---
+ev=$(helm template t "$chart" --set ragApiUrl=http://x --set serviceTokenSecret.name=s --set existingServiceAccount=k8s-c-abc \
+  --set uploads.bucket=b-1 --set uploads.queueUrl=https://sqs.us-west-2.amazonaws.com/5/sgt-rag-d-c)
+[ "$(grep -c '^kind: Deployment$' <<<"$ev")" = 1 ] || fail "queueUrl => one consumer Deployment"
+grep -q 'name: t-uploads-events' <<<"$ev" || fail "consumer name"
+grep -q '"rag_api.events"' <<<"$ev" || fail "consumer command"
+grep -q 'value: "https://sqs.us-west-2.amazonaws.com/5/sgt-rag-d-c"' <<<"$ev" || fail "QUEUE_URL env"
+grep -q 'serviceAccountName: k8s-c-abc' <<<"$ev" || fail "consumer uses rag-api SA"
+grep -q 'schedule: "0 \* \* \* \*"' <<<"$ev" || fail "uploads CronJob becomes hourly safety net"
+[ "$(helm template t "$chart" --set ragApiUrl=http://x --set serviceTokenSecret.name=s --set existingServiceAccount=k8s-c-abc --set uploads.bucket=b-1 | grep -c '^kind: Deployment$')" = 0 ] || fail "no queueUrl => no consumer"
+helm template t "$chart" --set ragApiUrl=http://x --set serviceTokenSecret.name=s --set existingServiceAccount=k8s-c-abc \
+  --set uploads.queueUrl=https://q >/dev/null 2>&1 && fail "queueUrl without bucket must fail"
+
+# --- P5.1 Task 6 fix round 1: Deployment selector must not overlap Job/CronJob pods ---
+combined=$(helm template t "$chart" --set ragApiUrl=http://x --set serviceTokenSecret.name=s --set existingServiceAccount=k8s-c-abc \
+  --set uploads.bucket=b-1 --set uploads.queueUrl=https://sqs.us-west-2.amazonaws.com/5/sgt-rag-d-c \
+  --set-json 'sources=[{"id":"docs","bucket":"b1","mode":"both","schedule":"0 * * * *"}]')
+depdoc=$(awk '/^---/{p=0} /^kind: /{p=($2=="Deployment")} p' <<<"$combined")
+[ "$(grep -c 'app.kubernetes.io/component: uploads-events' <<<"$depdoc")" = 2 ] || fail "Deployment selector+template need component=uploads-events (want 2 occurrences: selector.matchLabels + template.metadata.labels)"
+for k in Job CronJob; do
+  doc=$(awk -v k="$k" '/^---/{p=0} /^kind: /{p=($2==k)} p' <<<"$combined")
+  grep -q 'app.kubernetes.io/component: uploads-events' <<<"$doc" && fail "$k pod template must not carry the uploads-events component label"
+done
+
 echo "rag-sync render OK"

@@ -1,0 +1,21 @@
+{{- if and .Values.uploads.queueUrl (not .Values.uploads.bucket) }}{{ fail "uploads.queueUrl requires uploads.bucket" }}{{- end }}
+{{- if .Values.uploads.queueUrl }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "rag-sync.fitName" (dict "name" (printf "%s-uploads-events" .Release.Name) "max" 63) }}
+  labels: {{- include "rag-sync.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "rag-sync.labels" . | nindent 6 }}
+      app.kubernetes.io/component: uploads-events
+  template:
+    metadata:
+      labels:
+        {{- include "rag-sync.labels" . | nindent 8 }}
+        app.kubernetes.io/component: uploads-events
+    spec: {{- include "rag-sync.podSpec" (dict "root" . "src" (dict "id" "uploads-events") "events" true "restartPolicy" "Always") | nindent 6 }}
+{{- end }}

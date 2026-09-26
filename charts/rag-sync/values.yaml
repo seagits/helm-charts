@@ -1,6 +1,6 @@
 image:
   repository: public.ecr.aws/q6s1l7f2/sg-rag-api
-  tag: "0.1.3"
+  tag: "0.1.4"
   pullPolicy: IfNotPresent
 
 ragApiUrl: ""  # http://<rag-api svc>:8000  (${stack.rag-api.svc})
@@ -38,3 +38,6 @@ uploads:
   bucket: ""
   prefix: "uploads/"
   schedule: "*/5 * * * *"
+  queueUrl: ""             # SQS queue for S3 upload event notifications; set => a consumer
+                            # Deployment replaces polling and the CronJob becomes an hourly safety net
+  safetySchedule: "0 * * * *"
