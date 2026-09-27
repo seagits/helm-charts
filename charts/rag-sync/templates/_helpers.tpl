@@ -43,10 +43,12 @@ always mirrors deletes, since the shared bucket is the sole source of truth for 
 
 {{/*
 Per-source sync intent. Two input shapes on a source dict:
-  - new: `sync` ("none"|"schedule"|"events"|"events_sweep") + optional `import_now` (default true
-    when `sync` is present but `import_now` is absent), `region`, `role_arn`.
-  - legacy: no `sync` key -> `mode` (default "once_cron"), accepting both this chart's 0.2.x
-    values ("once"|"schedule"|"both") and the newer legacy spelling ("once"|"cron"|"once_cron").
+  - new-style: source has `sync` and/or `import_now`. `sync` (default "events_sweep" when the
+    source is new-style but `sync` itself is absent) is one of
+    "none"|"schedule"|"events"|"events_sweep"; `import_now` defaults to true when absent.
+  - legacy: neither `sync` nor `import_now` present -> `mode` (default "once", matching 0.2.x's
+    `.mode | default "once"`), accepting both this chart's 0.2.x values ("once"|"schedule"|"both")
+    and the newer legacy spelling ("once"|"cron"|"once_cron").
 Returns dict{import,schedule,events} (all bool), JSON-encoded. Fails fast on an unknown `sync`
 value or a source that would never be indexed by anything (no import, no schedule, no events).
 Runs validateSourceId so every source is checked here regardless of which workload it renders.
@@ -54,13 +56,14 @@ Runs validateSourceId so every source is checked here regardless of which worklo
 {{- define "rag-sync.syncOf" -}}
 {{- include "rag-sync.validateSourceId" . -}}
 {{- $imp := false -}}{{- $sch := false -}}{{- $evt := false -}}
-{{- if hasKey . "sync" -}}
+{{- if or (hasKey . "sync") (hasKey . "import_now") -}}
   {{- $imp = (hasKey . "import_now" | ternary .import_now true) -}}
-  {{- $sch = has .sync (list "schedule" "events_sweep") -}}
-  {{- $evt = has .sync (list "events" "events_sweep") -}}
-  {{- if not (has .sync (list "none" "schedule" "events" "events_sweep")) -}}{{- fail (printf "source %s: unknown sync %q" .id .sync) -}}{{- end -}}
+  {{- $sync := .sync | default "events_sweep" -}}
+  {{- $sch = has $sync (list "schedule" "events_sweep") -}}
+  {{- $evt = has $sync (list "events" "events_sweep") -}}
+  {{- if not (has $sync (list "none" "schedule" "events" "events_sweep")) -}}{{- fail (printf "source %s: unknown sync %q" .id $sync) -}}{{- end -}}
 {{- else -}}
-  {{- $m := .mode | default "once_cron" -}}
+  {{- $m := .mode | default "once" -}}
   {{- $imp = has $m (list "once" "once_cron" "both") -}}
   {{- $sch = has $m (list "cron" "once_cron" "schedule" "both") -}}
 {{- end -}}

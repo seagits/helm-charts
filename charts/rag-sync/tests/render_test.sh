@@ -76,6 +76,19 @@ expect_env "region reaches SOURCE_JSON too" \
 expect_env "events source lands in SOURCES_JSON" \
   '[{"id":"kb","bucket":"b","import_now":false,"sync":"events"}]' \
   'SOURCES_JSON' '\"id\":\"kb\"' --set eventsQueueUrl=https://q
+
+# --- fix round 1 findings ---
+# CRITICAL: a bare legacy source (no mode/sync/import_now key at all) must default to "once"
+# (matching 0.2.x's `.mode | default "once"`), i.e. Job only -- NOT "once_cron"/CronJob+Job.
+expect_kinds "bare legacy source defaults to once" '[{"id":"docs","bucket":"b1"}]' "Job"
+# IMPORTANT: a source is "new-style" as soon as it has `sync` OR `import_now` -- either alone
+# opts it in. New-style with `sync` absent defaults `sync` to "events_sweep".
+expect_kinds "import_now alone, false: no Job, sync defaults events_sweep" \
+  '[{"id":"kb","bucket":"b","import_now":false,"schedule":"0 2 * * *"}]' \
+  "CronJob Deployment" --set eventsQueueUrl=https://q
+expect_kinds "import_now alone, true: no sync given, sync defaults events_sweep" \
+  '[{"id":"kb","bucket":"b","import_now":true,"schedule":"0 2 * * *"}]' \
+  "Job CronJob Deployment" --set eventsQueueUrl=https://q
 [ "$(grep -c '^kind: Job$' <<<"$out")" = 2 ] || fail "want 2 Jobs (docs+faq once)"
 [ "$(grep -c '^kind: CronJob$' <<<"$out")" = 1 ] || fail "want 1 CronJob (docs)"
 [ "$(grep -c '^kind: ServiceAccount$' <<<"$out")" = 2 ] || fail "want 2 SAs per source"
