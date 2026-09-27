@@ -1,5 +1,5 @@
 {{- range .Values.sources }}
-{{- if has (.mode | default "once") (list "once" "both") }}
+{{- if (include "rag-sync.syncOf" . | fromJson).import }}
 ---
 apiVersion: batch/v1
 kind: Job

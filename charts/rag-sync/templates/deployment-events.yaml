@@ -1,5 +1,9 @@
 {{- if and .Values.uploads.queueUrl (not .Values.uploads.bucket) }}{{ fail "uploads.queueUrl requires uploads.bucket" }}{{- end }}
-{{- if .Values.uploads.queueUrl }}
+{{- $queueUrl := .Values.eventsQueueUrl | default .Values.uploads.queueUrl }}
+{{- $hasEventSources := false }}
+{{- range .Values.sources }}{{- if (include "rag-sync.syncOf" . | fromJson).events }}{{- $hasEventSources = true }}{{- end }}{{- end }}
+{{- if and $hasEventSources (not $queueUrl) }}{{ fail "one or more sources use sync: events/events_sweep but neither eventsQueueUrl nor uploads.queueUrl is set" }}{{- end }}
+{{- if $queueUrl }}
 ---
 apiVersion: apps/v1
 kind: Deployment
