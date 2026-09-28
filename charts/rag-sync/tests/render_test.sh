@@ -216,4 +216,31 @@ for k in Job CronJob; do
   grep -q 'app.kubernetes.io/component: uploads-events' <<<"$doc" && fail "$k pod template must not carry the uploads-events component label"
 done
 
+# --- final review C-C2: uploads.region / uploads.role_arn reach the uploads source (CronJob
+# SOURCE_JSON and the events consumer's SOURCES_JSON) so an existing uploads bucket in another
+# account/region is readable ---
+up=(--set ragApiUrl=http://x --set serviceTokenSecret.name=s --set existingServiceAccount=k8s-c-abc
+  --set uploads.bucket=b-1 --set uploads.queueUrl=https://sqs.us-west-2.amazonaws.com/5/q
+  --set uploads.region=eu-central-1 --set uploads.role_arn=arn:aws:iam::9:role/up)
+upx=$(helm template t "$chart" "${up[@]}")
+grep -A1 'name: SOURCE_JSON$' <<<"$upx" | grep -qF '\"region\":\"eu-central-1\"' || fail "C-C2: uploads SOURCE_JSON region"
+grep -A1 'name: SOURCE_JSON$' <<<"$upx" | grep -qF '\"role_arn\":\"arn:aws:iam::9:role/up\"' || fail "C-C2: uploads SOURCE_JSON role_arn"
+grep -A1 'name: SOURCES_JSON$' <<<"$upx" | grep -qF '\"region\":\"eu-central-1\"' || fail "C-C2: events SOURCES_JSON uploads region"
+grep -A1 'name: SOURCES_JSON$' <<<"$upx" | grep -qF '\"role_arn\":\"arn:aws:iam::9:role/up\"' || fail "C-C2: events SOURCES_JSON uploads role_arn"
+
+# --- final review C-I5: region / role_arn keys are emitted only when non-empty (older consumer
+# images build SourceSpec(**json) and crash on keys they do not know) ---
+plain=$(helm template t "$chart" --set ragApiUrl=http://x --set serviceTokenSecret.name=s --set existingServiceAccount=k8s-c-abc \
+  --set uploads.bucket=b-1 --set uploads.queueUrl=https://sqs.us-west-2.amazonaws.com/5/q \
+  --set-json 'sources=[{"id":"kb","bucket":"b","import_now":true,"sync":"events_sweep","schedule":"0 * * * *"}]')
+for v in SOURCE_JSON SOURCES_JSON; do
+  lines=$(grep -A1 "name: $v\$" <<<"$plain" | grep 'value:')
+  [ -n "$lines" ] || fail "C-I5: $v not rendered"
+  grep -qF '\"region\"' <<<"$lines" && fail "C-I5: empty region must be omitted from $v: $lines"
+  grep -qF '\"role_arn\"' <<<"$lines" && fail "C-I5: empty role_arn must be omitted from $v: $lines"
+done
+expect_env "C-I5: non-empty user region still emitted in SOURCES_JSON" \
+  '[{"id":"kb","bucket":"b","import_now":false,"sync":"events","region":"eu-west-1"}]' \
+  'SOURCES_JSON' '\"region\":\"eu-west-1\"' --set eventsQueueUrl=https://q
+
 echo "rag-sync render OK"

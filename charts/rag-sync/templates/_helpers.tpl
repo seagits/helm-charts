@@ -28,9 +28,36 @@ appends an 11-char suffix to the Jobs it creates).
 {{- end -}}
 {{- end }}
 
+{{/*
+The per-source object shared by SOURCE_JSON and SOURCES_JSON. `region` / `role_arn` are added only
+when non-empty: consumer images older than the bucket-access release build their SourceSpec from
+every key and crash on ones they do not know (final review C-I5).
+Params: the source fields (.id .bucket .prefix .extensions .mirror_deletes .region .role_arn).
+*/}}
+{{- define "rag-sync.sourceObj" -}}
+{{- $d := dict "id" .id "bucket" .bucket "prefix" .prefix "extensions" .extensions "mirror_deletes" .mirror_deletes -}}
+{{- with .region }}{{- $_ := set $d "region" . -}}{{- end -}}
+{{- with .role_arn }}{{- $_ := set $d "role_arn" . -}}{{- end -}}
+{{- $d | toJson -}}
+{{- end }}
+
+{{/* A user source's object (see rag-sync.sourceObj). */}}
+{{- define "rag-sync.userSourceObj" -}}
+{{- include "rag-sync.sourceObj" (dict "id" .id "bucket" .bucket "prefix" (.prefix | default "") "extensions" (.extensions | default list) "mirror_deletes" (.mirrorDeletes | default false) "region" (.region | default "") "role_arn" (.role_arn | default "")) -}}
+{{- end }}
+
+{{/*
+The reserved `uploads` source's object: always mirrors deletes (the shared bucket is the sole
+source of truth for uploaded files). uploads.region / uploads.role_arn let this cluster read an
+existing uploads bucket in another account/region (final review C-C2).
+*/}}
+{{- define "rag-sync.uploadsSourceObj" -}}
+{{- include "rag-sync.sourceObj" (dict "id" "uploads" "bucket" .Values.uploads.bucket "prefix" (.Values.uploads.prefix | default "uploads/") "extensions" list "mirror_deletes" true "region" (.Values.uploads.region | default "") "role_arn" (.Values.uploads.role_arn | default "")) -}}
+{{- end }}
+
 {{- define "rag-sync.sourceJson" -}}
 {{- include "rag-sync.validateSourceId" . -}}
-{{- dict "id" .id "bucket" .bucket "prefix" (.prefix | default "") "extensions" (.extensions | default list) "mirror_deletes" (.mirrorDeletes | default false) "region" (.region | default "") "role_arn" (.role_arn | default "") | toJson -}}
+{{- include "rag-sync.userSourceObj" . -}}
 {{- end }}
 
 {{/*
@@ -38,7 +65,7 @@ The `uploads` SOURCE_JSON: bypasses validateSourceId (the one place "uploads" is
 always mirrors deletes, since the shared bucket is the sole source of truth for uploaded files.
 */}}
 {{- define "rag-sync.uploadsSourceJson" -}}
-{{- dict "id" "uploads" "bucket" .Values.uploads.bucket "prefix" (.Values.uploads.prefix | default "uploads/") "extensions" list "mirror_deletes" true "region" "" "role_arn" "" | toJson -}}
+{{- include "rag-sync.uploadsSourceObj" . -}}
 {{- end }}
 
 {{/*
@@ -74,17 +101,17 @@ Runs validateSourceId so every source is checked here regardless of which worklo
 {{/*
 The events consumer's SOURCES_JSON: a JSON array combining the `uploads` source (when
 uploads.bucket is set) with every user source whose rag-sync.syncOf has `events` true. Same
-object shape as SOURCE_JSON (id, bucket, prefix, extensions, mirror_deletes, region, role_arn) so
-the consumer parses one schema everywhere.
+object shape as SOURCE_JSON (rag-sync.sourceObj: id, bucket, prefix, extensions, mirror_deletes,
+plus region / role_arn when non-empty) so the consumer parses one schema everywhere.
 */}}
 {{- define "rag-sync.eventsSourcesJson" -}}
 {{- $list := list -}}
 {{- if .Values.uploads.bucket -}}
-{{- $list = append $list (dict "id" "uploads" "bucket" .Values.uploads.bucket "prefix" (.Values.uploads.prefix | default "uploads/") "extensions" list "mirror_deletes" true "region" "" "role_arn" "") -}}
+{{- $list = append $list (include "rag-sync.uploadsSourceObj" . | fromJson) -}}
 {{- end -}}
 {{- range .Values.sources -}}
 {{- if (include "rag-sync.syncOf" . | fromJson).events -}}
-{{- $list = append $list (dict "id" .id "bucket" .bucket "prefix" (.prefix | default "") "extensions" (.extensions | default list) "mirror_deletes" (.mirrorDeletes | default false) "region" (.region | default "") "role_arn" (.role_arn | default "")) -}}
+{{- $list = append $list (include "rag-sync.userSourceObj" . | fromJson) -}}
 {{- end -}}
 {{- end -}}
 {{- $list | toJson -}}

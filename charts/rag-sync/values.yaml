@@ -53,6 +53,10 @@ eventsQueueUrl: ""
 uploads:
   bucket: ""
   prefix: "uploads/"
+  # An existing uploads bucket in another account/region: its region and the role to assume to
+  # read it (both empty = the pod's own IRSA role, AWS_REGION).
+  region: ""
+  role_arn: ""
   schedule: "*/5 * * * *"
   queueUrl: ""             # SQS queue for S3 upload event notifications; set => a consumer
                             # Deployment replaces polling and the CronJob becomes an hourly safety net
