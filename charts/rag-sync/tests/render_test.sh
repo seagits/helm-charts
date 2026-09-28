@@ -7,6 +7,88 @@ out=$(helm template t "$chart" \
   --set serviceTokenSecret.name=rag-secrets \
   --set-json 'sources=[{"id":"docs","bucket":"b1","prefix":"kb/","mode":"both","schedule":"*/30 * * * *","roleArn":"arn:aws:iam::1:role/r-docs","mirrorDeletes":true},{"id":"faq","bucket":"b2","mode":"once"}]')
 fail() { echo "FAIL: $1"; exit 1; }
+
+# --- Task 13 helpers: import_now/sync fields + events sync (no yq available; grep/awk instead) ---
+# common_args: a minimal, valid base (existingServiceAccount so ServiceAccount never renders and
+# these kind-set assertions stay simple).
+common_args=(--set ragApiUrl=http://x --set serviceTokenSecret.name=s --set existingServiceAccount=k8s-c-abc)
+
+# expect_kinds LABEL SOURCES_JSON_ARRAY EXPECTED_KINDS [EXTRA_HELM_ARGS...]
+# Renders with `sources` set to SOURCES_JSON_ARRAY (a JSON array literal) and asserts the sorted,
+# de-duplicated set of `kind:` values in the output exactly matches EXPECTED_KINDS (space-separated).
+expect_kinds() {
+  local label="$1" src="$2" expected="$3"; shift 3
+  local out
+  if ! out=$(helm template t "$chart" "${common_args[@]}" --set-json "sources=$src" "$@" 2>&1); then
+    fail "$label: expected render to succeed, got: $out"
+  fi
+  local got want
+  got=$(grep '^kind: ' <<<"$out" | awk '{print $2}' | sort -u | tr '\n' ' ' | sed 's/ *$//')
+  want=$(tr ' ' '\n' <<<"$expected" | sort -u | tr '\n' ' ' | sed 's/ *$//')
+  [ "$got" = "$want" ] || fail "$label: want kinds [$want] got [$got]: $out"
+}
+
+# expect_fail LABEL SOURCES_JSON_ARRAY MESSAGE_SUBSTRING
+# Asserts the render fails (non-zero exit) and stderr/stdout contains MESSAGE_SUBSTRING.
+expect_fail() {
+  local label="$1" src="$2" msg="$3"
+  local out
+  if out=$(helm template t "$chart" "${common_args[@]}" --set-json "sources=$src" 2>&1); then
+    fail "$label: expected render to fail, it rendered OK: $out"
+  fi
+  grep -qF "$msg" <<<"$out" || fail "$label: expected error to mention '$msg', got: $out"
+}
+
+# expect_env LABEL SOURCES_JSON_ARRAY ENV_VAR_NAME VALUE_SUBSTRING
+# Asserts some `- name: ENV_VAR_NAME` block's `value:` line contains VALUE_SUBSTRING.
+expect_env() {
+  local label="$1" src="$2" var="$3" val="$4"; shift 4 || true
+  local out
+  if ! out=$(helm template t "$chart" "${common_args[@]}" --set-json "sources=$src" "$@" 2>&1); then
+    fail "$label: expected render to succeed, got: $out"
+  fi
+  grep -A1 "name: $var$" <<<"$out" | grep -qF "$val" || fail "$label: expected $var to contain '$val', got: $out"
+}
+
+# legacy modes keep rendering exactly as 0.2.x (both the original mode vocabulary this chart
+# shipped with -- once/schedule/both -- and the once/cron/once_cron spelling)
+expect_kinds "legacy once"      '[{"id":"kb","bucket":"b","mode":"once"}]'                                    "Job"
+expect_kinds "legacy cron"      '[{"id":"kb","bucket":"b","mode":"cron","schedule":"0 2 * * *"}]'             "CronJob"
+expect_kinds "legacy once_cron" '[{"id":"kb","bucket":"b","mode":"once_cron","schedule":"0 2 * * *"}]'        "Job CronJob"
+expect_kinds "legacy schedule"  '[{"id":"kb","bucket":"b","mode":"schedule","schedule":"0 2 * * *"}]'         "CronJob"
+expect_kinds "legacy both"      '[{"id":"kb","bucket":"b","mode":"both","schedule":"0 2 * * *"}]'             "Job CronJob"
+
+# new import_now/sync fields
+expect_kinds "import+events_sweep" '[{"id":"kb","bucket":"b","import_now":true,"sync":"events_sweep","schedule":"0 2 * * *"}]' \
+  "Job CronJob Deployment" --set eventsQueueUrl=https://q
+expect_kinds "events only" '[{"id":"kb","bucket":"b","import_now":false,"sync":"events"}]' \
+  "Deployment" --set eventsQueueUrl=https://q
+expect_fail "nothing to do" '[{"id":"kb","bucket":"b","import_now":false,"sync":"none"}]' "would never be indexed"
+expect_fail "unknown sync value" '[{"id":"kb","bucket":"b","import_now":true,"sync":"whenever"}]' "unknown sync"
+expect_fail "events with no queue configured" '[{"id":"kb","bucket":"b","import_now":false,"sync":"events"}]' \
+  "neither eventsQueueUrl nor uploads.queueUrl is set"
+expect_env "role + region reach the pod" \
+  '[{"id":"kb","bucket":"b","import_now":true,"sync":"none","region":"eu-west-1","role_arn":"arn:aws:iam::9:role/r"}]' \
+  'SOURCE_JSON' '\"role_arn\":\"arn:aws:iam::9:role/r\"'
+expect_env "region reaches SOURCE_JSON too" \
+  '[{"id":"kb","bucket":"b","import_now":true,"sync":"none","region":"eu-west-1","role_arn":"arn:aws:iam::9:role/r"}]' \
+  'SOURCE_JSON' '\"region\":\"eu-west-1\"'
+expect_env "events source lands in SOURCES_JSON" \
+  '[{"id":"kb","bucket":"b","import_now":false,"sync":"events"}]' \
+  'SOURCES_JSON' '\"id\":\"kb\"' --set eventsQueueUrl=https://q
+
+# --- fix round 1 findings ---
+# CRITICAL: a bare legacy source (no mode/sync/import_now key at all) must default to "once"
+# (matching 0.2.x's `.mode | default "once"`), i.e. Job only -- NOT "once_cron"/CronJob+Job.
+expect_kinds "bare legacy source defaults to once" '[{"id":"docs","bucket":"b1"}]' "Job"
+# IMPORTANT: a source is "new-style" as soon as it has `sync` OR `import_now` -- either alone
+# opts it in. New-style with `sync` absent defaults `sync` to "events_sweep".
+expect_kinds "import_now alone, false: no Job, sync defaults events_sweep" \
+  '[{"id":"kb","bucket":"b","import_now":false,"schedule":"0 2 * * *"}]' \
+  "CronJob Deployment" --set eventsQueueUrl=https://q
+expect_kinds "import_now alone, true: no sync given, sync defaults events_sweep" \
+  '[{"id":"kb","bucket":"b","import_now":true,"schedule":"0 2 * * *"}]' \
+  "Job CronJob Deployment" --set eventsQueueUrl=https://q
 [ "$(grep -c '^kind: Job$' <<<"$out")" = 2 ] || fail "want 2 Jobs (docs+faq once)"
 [ "$(grep -c '^kind: CronJob$' <<<"$out")" = 1 ] || fail "want 1 CronJob (docs)"
 [ "$(grep -c '^kind: ServiceAccount$' <<<"$out")" = 2 ] || fail "want 2 SAs per source"
@@ -133,5 +215,32 @@ for k in Job CronJob; do
   doc=$(awk -v k="$k" '/^---/{p=0} /^kind: /{p=($2==k)} p' <<<"$combined")
   grep -q 'app.kubernetes.io/component: uploads-events' <<<"$doc" && fail "$k pod template must not carry the uploads-events component label"
 done
+
+# --- final review C-C2: uploads.region / uploads.role_arn reach the uploads source (CronJob
+# SOURCE_JSON and the events consumer's SOURCES_JSON) so an existing uploads bucket in another
+# account/region is readable ---
+up=(--set ragApiUrl=http://x --set serviceTokenSecret.name=s --set existingServiceAccount=k8s-c-abc
+  --set uploads.bucket=b-1 --set uploads.queueUrl=https://sqs.us-west-2.amazonaws.com/5/q
+  --set uploads.region=eu-central-1 --set uploads.role_arn=arn:aws:iam::9:role/up)
+upx=$(helm template t "$chart" "${up[@]}")
+grep -A1 'name: SOURCE_JSON$' <<<"$upx" | grep -qF '\"region\":\"eu-central-1\"' || fail "C-C2: uploads SOURCE_JSON region"
+grep -A1 'name: SOURCE_JSON$' <<<"$upx" | grep -qF '\"role_arn\":\"arn:aws:iam::9:role/up\"' || fail "C-C2: uploads SOURCE_JSON role_arn"
+grep -A1 'name: SOURCES_JSON$' <<<"$upx" | grep -qF '\"region\":\"eu-central-1\"' || fail "C-C2: events SOURCES_JSON uploads region"
+grep -A1 'name: SOURCES_JSON$' <<<"$upx" | grep -qF '\"role_arn\":\"arn:aws:iam::9:role/up\"' || fail "C-C2: events SOURCES_JSON uploads role_arn"
+
+# --- final review C-I5: region / role_arn keys are emitted only when non-empty (older consumer
+# images build SourceSpec(**json) and crash on keys they do not know) ---
+plain=$(helm template t "$chart" --set ragApiUrl=http://x --set serviceTokenSecret.name=s --set existingServiceAccount=k8s-c-abc \
+  --set uploads.bucket=b-1 --set uploads.queueUrl=https://sqs.us-west-2.amazonaws.com/5/q \
+  --set-json 'sources=[{"id":"kb","bucket":"b","import_now":true,"sync":"events_sweep","schedule":"0 * * * *"}]')
+for v in SOURCE_JSON SOURCES_JSON; do
+  lines=$(grep -A1 "name: $v\$" <<<"$plain" | grep 'value:')
+  [ -n "$lines" ] || fail "C-I5: $v not rendered"
+  grep -qF '\"region\"' <<<"$lines" && fail "C-I5: empty region must be omitted from $v: $lines"
+  grep -qF '\"role_arn\"' <<<"$lines" && fail "C-I5: empty role_arn must be omitted from $v: $lines"
+done
+expect_env "C-I5: non-empty user region still emitted in SOURCES_JSON" \
+  '[{"id":"kb","bucket":"b","import_now":false,"sync":"events","region":"eu-west-1"}]' \
+  'SOURCES_JSON' '\"region\":\"eu-west-1\"' --set eventsQueueUrl=https://q
 
 echo "rag-sync render OK"

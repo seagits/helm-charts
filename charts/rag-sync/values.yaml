@@ -1,6 +1,6 @@
 image:
   repository: public.ecr.aws/q6s1l7f2/sg-rag-api
-  tag: "0.1.4"
+  tag: "0.1.5"
   pullPolicy: IfNotPresent
 
 ragApiUrl: ""  # http://<rag-api svc>:8000  (${stack.rag-api.svc})
@@ -29,14 +29,34 @@ resources:
     memory: 1Gi
 
 sources: []  # each: { id (DNS-1123 label: ^[a-z0-9]([-a-z0-9]{0,38}[a-z0-9])?$),
-             #         bucket, prefix, extensions: [], mirrorDeletes: false,
-             #         mode: once|schedule|both, schedule: "0 * * * *", roleArn: "" }
+             #         bucket, prefix, extensions: [], mirrorDeletes: false, region: "", role_arn: "",
+             #         roleArn: "" (IRSA annotation on the per-source ServiceAccount),
+             #
+             #         # preferred: sync fields. A source is "new-style" once it sets `sync` and/or
+             #         # `import_now` -- either one alone is enough to opt in.
+             #         import_now: true, sync: none|schedule|events|events_sweep, schedule: "0 * * * *",
+             #         #   import_now defaults to true when absent on a new-style source.
+             #         #   sync defaults to "events_sweep" when absent on a new-style source.
+             #         #   sync: schedule/events_sweep render a CronJob; events/events_sweep render (with
+             #         #   the events Deployment, see eventsQueueUrl below) as an S3-event-driven source.
+             #
+             #         # legacy (neither `sync` nor `import_now` present): mode: once|schedule|both
+             #         # (or once|cron|once_cron), default "once" -- matches 0.2.x }
+
+# SQS queue carrying S3 event notifications for sources with sync: events/events_sweep. Falls back
+# to uploads.queueUrl when unset (the events Deployment runs once, off one queue, either way).
+# Required if any source uses an events sync.
+eventsQueueUrl: ""
 
 # Multi-cluster stacks (P5): the shared uploads bucket, ingested by this cluster every 5 min as the
 # reserved `uploads` source (rag-api must run UPLOADS_MODE=bucket-only). Empty bucket = no job.
 uploads:
   bucket: ""
   prefix: "uploads/"
+  # An existing uploads bucket in another account/region: its region and the role to assume to
+  # read it (both empty = the pod's own IRSA role, AWS_REGION).
+  region: ""
+  role_arn: ""
   schedule: "*/5 * * * *"
   queueUrl: ""             # SQS queue for S3 upload event notifications; set => a consumer
                             # Deployment replaces polling and the CronJob becomes an hourly safety net

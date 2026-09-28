@@ -1,6 +1,6 @@
 {{- if and .Values.uploads.bucket (not .Values.existingServiceAccount) }}{{ fail "uploads.bucket requires existingServiceAccount" }}{{- end }}
 {{- range .Values.sources }}
-{{- if has (.mode | default "once") (list "schedule" "both") }}
+{{- if (include "rag-sync.syncOf" . | fromJson).schedule }}
 ---
 apiVersion: batch/v1
 kind: CronJob
@@ -8,7 +8,7 @@ metadata:
   name: {{ include "rag-sync.cronJobName" (dict "root" $ "src" .) }}
   labels: {{- include "rag-sync.labels" $ | nindent 4 }}
 spec:
-  schedule: {{ required "schedule is required for mode schedule/both" .schedule | quote }}
+  schedule: {{ required (printf "source %s: schedule is required when sync/mode enables a scheduled run" .id) .schedule | quote }}
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
