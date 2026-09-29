@@ -243,4 +243,48 @@ expect_env "C-I5: non-empty user region still emitted in SOURCES_JSON" \
   '[{"id":"kb","bucket":"b","import_now":false,"sync":"events","region":"eu-west-1"}]' \
   'SOURCES_JSON' '\"region\":\"eu-west-1\"' --set eventsQueueUrl=https://q
 
+# --- 0.5.0: the uploads slot takes the data-source sync vocabulary (spec 2026-09-29 uploads §5) ---
+ub=(--set ragApiUrl=http://x --set serviceTokenSecret.name=s --set existingServiceAccount=k8s-c-abc --set uploads.bucket=b-1)
+q=(--set eventsQueueUrl=https://sqs.us-east-1.amazonaws.com/5/sgt-rag-d-c)
+kinds() { grep '^kind: ' <<<"$1" | awk '{print $2}' | sort | tr '\n' ' ' | sed 's/ *$//'; }
+
+o=$(helm template t "$chart" "${ub[@]}" "${q[@]}" --set uploads.sync=events_sweep --set uploads.schedule="0 * * * *")
+[ "$(kinds "$o")" = "CronJob Deployment" ] || fail "uploads events_sweep: want CronJob+Deployment, got $(kinds "$o")"
+grep -q 'schedule: "0 \* \* \* \*"' <<<"$o" || fail "uploads events_sweep uses uploads.schedule"
+grep -A1 'name: SOURCES_JSON$' <<<"$o" | grep -qF '\"id\":\"uploads\"' || fail "events_sweep: uploads in SOURCES_JSON"
+
+o=$(helm template t "$chart" "${ub[@]}" "${q[@]}" --set uploads.sync=events)
+[ "$(kinds "$o")" = "Deployment" ] || fail "uploads events: want Deployment only, got $(kinds "$o")"
+
+# MINOR d (2026-09-29 rag-uploads-storage-and-sync): `--set-string uploads.import_now=false`
+# passes the STRING "false", not the boolean -- `| default false` treats any non-empty string as
+# truthy and would import anyway. Must render the same as import_now unset/false: no Job.
+o=$(helm template t "$chart" "${ub[@]}" "${q[@]}" --set uploads.sync=events --set-string uploads.import_now=false)
+[ "$(kinds "$o")" = "Deployment" ] || fail "uploads import_now=\"false\" (string) must not import: want Deployment only, got $(kinds "$o")"
+
+o=$(helm template t "$chart" "${ub[@]}" "${q[@]}" --set uploads.sync=schedule --set uploads.schedule="0 2 * * *")
+[ "$(kinds "$o")" = "CronJob" ] || fail "uploads schedule (no event sources): want CronJob only, got $(kinds "$o")"
+grep -q 'schedule: "0 2 \* \* \*"' <<<"$o" || fail "uploads schedule value"
+
+o=$(helm template t "$chart" "${ub[@]}" "${q[@]}" --set uploads.sync=events --set uploads.import_now=true --set uploads.prefix=docs/in/)
+[ "$(kinds "$o")" = "Deployment Job" ] || fail "uploads import_now: want Deployment+Job, got $(kinds "$o")"
+grep -q 'name: t-once-uploads-' <<<"$o" || fail "uploads import Job name"
+job=$(awk '/^kind: Job$/{p=1} p' <<<"$o")
+grep -q 'name: SYNC_UPLOADS' <<<"$job" || fail "uploads import Job sets SYNC_UPLOADS"
+grep -qF '\"prefix\":\"docs/in/\"' <<<"$job" || fail "uploads import Job uses uploads.prefix"
+
+helm template t "$chart" "${ub[@]}" "${q[@]}" --set uploads.sync=none >/dev/null 2>&1 && fail "uploads.sync none with a bucket must fail (leave bucket empty to turn uploads off)"
+helm template t "$chart" "${ub[@]}" "${q[@]}" --set uploads.sync=sometimes >/dev/null 2>&1 && fail "unknown uploads.sync must fail"
+# (no "schedule without uploads.schedule" case: values.yaml defaults uploads.schedule, and the
+#  template always renders an explicit uploads.schedule)
+
+# uploads off (template renders an empty bucket + sync none): nothing for uploads, no idle consumer
+o=$(helm template t "$chart" --set ragApiUrl=http://x --set serviceTokenSecret.name=s --set existingServiceAccount=k8s-c-abc "${q[@]}" --set uploads.sync=none)
+[ -z "$(kinds "$o")" ] || fail "uploads off + no sources: want nothing rendered, got $(kinds "$o")"
+
+# legacy (no uploads.sync key) is unchanged: 5-min CronJob + consumer whenever a queue is set
+o=$(helm template t "$chart" "${ub[@]}" "${q[@]}")
+[ "$(kinds "$o")" = "CronJob Deployment" ] || fail "legacy: CronJob+Deployment, got $(kinds "$o")"
+grep -q 'schedule: "\*/5 \* \* \* \*"' <<<"$o" || fail "legacy schedule stays */5 when only eventsQueueUrl is set"
+
 echo "rag-sync render OK"

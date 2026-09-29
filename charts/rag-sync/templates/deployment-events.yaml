@@ -3,7 +3,11 @@
 {{- $hasEventSources := false }}
 {{- range .Values.sources }}{{- if (include "rag-sync.syncOf" . | fromJson).events }}{{- $hasEventSources = true }}{{- end }}{{- end }}
 {{- if and $hasEventSources (not $queueUrl) }}{{ fail "one or more sources use sync: events/events_sweep but neither eventsQueueUrl nor uploads.queueUrl is set" }}{{- end }}
-{{- if $queueUrl }}
+{{- $uploadsEvents := false }}
+{{- if .Values.uploads.bucket }}{{- $uploadsEvents = (include "rag-sync.uploadsSyncOf" . | fromJson).events }}{{- end }}
+{{- $newStyle := hasKey .Values.uploads "sync" }}
+{{- if and $newStyle $uploadsEvents (not $queueUrl) }}{{ fail "uploads.sync uses events but neither eventsQueueUrl nor uploads.queueUrl is set" }}{{- end }}
+{{- if (ternary (or $hasEventSources $uploadsEvents) $queueUrl $newStyle) }}
 ---
 apiVersion: apps/v1
 kind: Deployment

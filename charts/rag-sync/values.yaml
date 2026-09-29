@@ -61,3 +61,6 @@ uploads:
   queueUrl: ""             # SQS queue for S3 upload event notifications; set => a consumer
                             # Deployment replaces polling and the CronJob becomes an hourly safety net
   safetySchedule: "0 * * * *"
+  # 0.5.0 (optional; absent = 0.4.0 behaviour): sync: none|schedule|events|events_sweep,
+  # schedule: "<cron>" (required for schedule/events_sweep), import_now: true|false (default
+  # false). Same meaning as a source's sync fields. Leave bucket empty to turn uploads off.
