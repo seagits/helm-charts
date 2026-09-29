@@ -13,3 +13,18 @@ spec:
   template: {{- include "rag-sync.podTemplate" (dict "root" $ "src" .) | nindent 4 }}
 {{- end }}
 {{- end }}
+{{- if .Values.uploads.bucket }}
+{{- if (include "rag-sync.uploadsSyncOf" . | fromJson).import }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "rag-sync.jobName" (dict "root" . "src" (dict "id" "uploads") "uploads" true) }}
+  labels: {{- include "rag-sync.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: {{ .Values.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: 86400
+  template: {{- include "rag-sync.podTemplate" (dict "root" . "src" (dict "id" "uploads") "uploads" true) | nindent 4 }}
+{{- end }}
+{{- end }}

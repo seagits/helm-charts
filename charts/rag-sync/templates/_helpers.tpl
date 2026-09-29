@@ -99,6 +99,34 @@ Runs validateSourceId so every source is checked here regardless of which worklo
 {{- end }}
 
 {{/*
+The reserved `uploads` slot's sync intent (0.5.0). New-style when uploads.sync is SET (the key
+exists): same vocabulary as rag-sync.syncOf; import_now defaults to FALSE (a new stack bucket
+starts empty — the template sets it true only for an existing bucket); `none` with a bucket
+fails (the template leaves uploads.bucket empty to turn uploads off). Legacy when uploads.sync is
+absent: exactly 0.4.0 — no import Job, a CronJob always (safetySchedule when uploads.queueUrl is
+set, else uploads.schedule) and uploads always in the events consumer.
+Returns dict{new,import,schedule,events,cron} JSON-encoded; only meaningful when uploads.bucket.
+*/}}
+{{- define "rag-sync.uploadsSyncOf" -}}
+{{- $u := .Values.uploads -}}
+{{- if hasKey $u "sync" -}}
+  {{- $sync := $u.sync | default "events_sweep" -}}
+  {{- if not (has $sync (list "none" "schedule" "events" "events_sweep")) -}}{{- fail (printf "uploads: unknown sync %q" $sync) -}}{{- end -}}
+  {{- $imp := $u.import_now | default false -}}
+  {{- $sch := has $sync (list "schedule" "events_sweep") -}}
+  {{- $evt := has $sync (list "events" "events_sweep") -}}
+  {{- if and $u.bucket (not $imp) (not $sch) (not $evt) -}}{{- fail "uploads: sync none with a bucket would never index uploads; leave uploads.bucket empty to turn uploads off" -}}{{- end -}}
+  {{- $cron := "" -}}
+  {{- if $sch -}}{{- $cron = required "uploads.schedule is required when uploads.sync is schedule or events_sweep" $u.schedule -}}{{- end -}}
+  {{- dict "new" true "import" $imp "schedule" $sch "events" $evt "cron" $cron | toJson -}}
+{{- else -}}
+  {{- $cron := $u.schedule -}}
+  {{- if $u.queueUrl -}}{{- $cron = $u.safetySchedule -}}{{- end -}}
+  {{- dict "new" false "import" false "schedule" true "events" true "cron" $cron | toJson -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 The events consumer's SOURCES_JSON: a JSON array combining the `uploads` source (when
 uploads.bucket is set) with every user source whose rag-sync.syncOf has `events` true. Same
 object shape as SOURCE_JSON (rag-sync.sourceObj: id, bucket, prefix, extensions, mirror_deletes,
@@ -106,7 +134,7 @@ plus region / role_arn when non-empty) so the consumer parses one schema everywh
 */}}
 {{- define "rag-sync.eventsSourcesJson" -}}
 {{- $list := list -}}
-{{- if .Values.uploads.bucket -}}
+{{- if and .Values.uploads.bucket (include "rag-sync.uploadsSyncOf" . | fromJson).events -}}
 {{- $list = append $list (include "rag-sync.uploadsSourceObj" . | fromJson) -}}
 {{- end -}}
 {{- range .Values.sources -}}
