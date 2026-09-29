@@ -256,6 +256,12 @@ grep -A1 'name: SOURCES_JSON$' <<<"$o" | grep -qF '\"id\":\"uploads\"' || fail "
 o=$(helm template t "$chart" "${ub[@]}" "${q[@]}" --set uploads.sync=events)
 [ "$(kinds "$o")" = "Deployment" ] || fail "uploads events: want Deployment only, got $(kinds "$o")"
 
+# MINOR d (2026-09-29 rag-uploads-storage-and-sync): `--set-string uploads.import_now=false`
+# passes the STRING "false", not the boolean -- `| default false` treats any non-empty string as
+# truthy and would import anyway. Must render the same as import_now unset/false: no Job.
+o=$(helm template t "$chart" "${ub[@]}" "${q[@]}" --set uploads.sync=events --set-string uploads.import_now=false)
+[ "$(kinds "$o")" = "Deployment" ] || fail "uploads import_now=\"false\" (string) must not import: want Deployment only, got $(kinds "$o")"
+
 o=$(helm template t "$chart" "${ub[@]}" "${q[@]}" --set uploads.sync=schedule --set uploads.schedule="0 2 * * *")
 [ "$(kinds "$o")" = "CronJob" ] || fail "uploads schedule (no event sources): want CronJob only, got $(kinds "$o")"
 grep -q 'schedule: "0 2 \* \* \*"' <<<"$o" || fail "uploads schedule value"

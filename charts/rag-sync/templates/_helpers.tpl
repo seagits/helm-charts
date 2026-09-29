@@ -112,7 +112,11 @@ Returns dict{new,import,schedule,events,cron} JSON-encoded; only meaningful when
 {{- if hasKey $u "sync" -}}
   {{- $sync := $u.sync | default "events_sweep" -}}
   {{- if not (has $sync (list "none" "schedule" "events" "events_sweep")) -}}{{- fail (printf "uploads: unknown sync %q" $sync) -}}{{- end -}}
-  {{- $imp := $u.import_now | default false -}}
+  {{/* MINOR d (2026-09-29 rag-uploads-storage-and-sync): `| default false` only substitutes on
+       Go's zero value (nil/false/""/0) - a quoted "false" (--set-string, or any string-typed
+       source) is a non-empty string and so is TRUTHY here, silently turning import on. Only a
+       real true / the string "true" counts as on. */}}
+  {{- $imp := eq (toString $u.import_now) "true" -}}
   {{- $sch := has $sync (list "schedule" "events_sweep") -}}
   {{- $evt := has $sync (list "events" "events_sweep") -}}
   {{- if and $u.bucket (not $imp) (not $sch) (not $evt) -}}{{- fail "uploads: sync none with a bucket would never index uploads; leave uploads.bucket empty to turn uploads off" -}}{{- end -}}
