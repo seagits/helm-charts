@@ -48,5 +48,8 @@ backup:
   firstBackup: true  # post-install backup. Keep true in production: it is also what makes the
                      # platform deploy this chart through Tier B (install hooks). CI sets false.
   activeDeadlineSeconds: 3600
+  # first/final backup hooks: must finish inside the worker's 600s Helm/Job wait (its SQS visibility is
+  # 900s, so it cannot wait longer). A database too big to dump in time: use Delete anyway.
+  hookDeadlineSeconds: 540
   endpointUrl: ""    # tests only (an S3 stand-in); empty = real S3
   extraEnvFromSecret: ""   # tests only: a Secret with AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY for an S3 stand-in

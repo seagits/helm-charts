@@ -9,7 +9,7 @@ metadata:
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 0
-  activeDeadlineSeconds: {{ .Values.backup.activeDeadlineSeconds }}
+  activeDeadlineSeconds: {{ .Values.backup.hookDeadlineSeconds }}
   template:
     spec: {{- include "sg-db.backupPod" (dict "root" . "mode" "final") | nindent 6 }}
 {{- end }}

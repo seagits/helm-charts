@@ -31,6 +31,7 @@ Seagit's Database Stack template; the platform fills the `${seagit.*}` values be
 | `backup.bucket` / `backup.region` | — | required bucket; Seagit: `${stack_bucket.name}` / `${ctx.region}` |
 | `backup.schedule` | `0 3 * * *` | |
 | `backup.retentionDays` | `7` | the backup job prunes older dumps itself |
+| `backup.activeDeadlineSeconds` / `backup.hookDeadlineSeconds` | `3600` / `540` | nightly / first+final; the hooks must finish inside the Seagit worker's 600s window |
 | `backup.onDelete` | `true` | `false` = "Delete anyway": no final backup |
 | `backup.firstBackup` | `true` | keep `true` in production (CI sets `false`) |
 | `backup.endpointUrl` / `backup.extraEnvFromSecret` | `""` | tests only (an S3 stand-in and its credentials) |

@@ -55,4 +55,8 @@ grep -q 'name: AWS_ENDPOINT_URL' <<<"$(render --set backup.endpointUrl=http://mi
 if helm template db1 "$chart" "${base[@]}" --set backup.bucket= >/dev/null 2>&1; then fail "empty backup bucket accepted"; fi
 grep -q 'secretRef: { name: minio-creds }' <<<"$(render --set backup.extraEnvFromSecret=minio-creds)" || fail "test env secret"
 grep -q 'envFrom' <<<"$pg" && fail "envFrom must be absent by default"
+# hooks must finish inside the worker's 600s Helm/Job window (SQS visibility 900s): 540s cap
+grep -B2 -A40 'name: db1-backup-final' <<<"$pg" | grep -q 'activeDeadlineSeconds: 540' || fail "final hook deadline 540s"
+grep -B2 -A40 'name: db1-backup-first' <<<"$pg" | grep -q 'activeDeadlineSeconds: 540' || fail "first hook deadline 540s"
+grep -A30 'kind: CronJob' <<<"$pg" | grep -q 'activeDeadlineSeconds: 3600' || fail "nightly keeps 3600s"
 echo "render_test: OK"
