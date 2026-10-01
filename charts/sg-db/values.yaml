@@ -45,3 +45,4 @@ backup:
                      # platform deploy this chart through Tier B (install hooks). CI sets false.
   activeDeadlineSeconds: 3600
   endpointUrl: ""    # tests only (MinIO); empty = real S3
+  extraEnvFromSecret: ""   # tests only: a Secret with AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY for MinIO

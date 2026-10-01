@@ -38,4 +38,21 @@ grep -q 'name: k8s-code1-db1' <<<"$pg" || fail "service account name"
 # --- validation ---
 if helm template db1 "$chart" --set engine=oracle "${base[@]}" >/dev/null 2>&1; then fail "bad engine accepted"; fi
 if helm template db1 "$chart" --set auth.appPassword= --set auth.adminPassword=x >/dev/null 2>&1; then fail "empty app password accepted"; fi
+# --- backups ---
+grep -q '"helm.sh/hook": post-install' <<<"$pg" || fail "first-backup post-install hook (also forces Tier B)"
+grep -q '"helm.sh/hook": post-install' <<<"$(render --set backup.firstBackup=false)" && fail "firstBackup=false must drop the post-install hook"
+grep -q '"helm.sh/hook": pre-delete' <<<"$pg" || fail "final-backup pre-delete hook"
+grep -q 'kind: CronJob' <<<"$pg" || fail "nightly CronJob"
+grep -q 'schedule: "0 3 \* \* \*"' <<<"$pg" || fail "default schedule"
+grep -q 'failedJobsHistoryLimit: 3' <<<"$pg" || fail "keep failed nightly jobs"
+grep -A3 'name: MODE' <<<"$pg" | grep -q 'value: "final"' || fail "final mode env"
+nodel=$(render --set backup.onDelete=false)
+grep -q '"helm.sh/hook": pre-delete' <<<"$nodel" && fail "onDelete=false must drop the pre-delete hook"
+grep -q 'pg_dump' <<<"$pg" || fail "postgres dump command"
+grep -q 'mysqldump' <<<"$my" || fail "mysql dump command"
+grep -q 'name: AWS_ENDPOINT_URL' <<<"$pg" && fail "endpoint env must be absent by default"
+grep -q 'name: AWS_ENDPOINT_URL' <<<"$(render --set backup.endpointUrl=http://minio:9000)" || fail "endpoint env for tests"
+if helm template db1 "$chart" "${base[@]}" --set backup.bucket= >/dev/null 2>&1; then fail "empty backup bucket accepted"; fi
+grep -q 'secretRef: { name: minio-creds }' <<<"$(render --set backup.extraEnvFromSecret=minio-creds)" || fail "test env secret"
+grep -q 'envFrom' <<<"$pg" && fail "envFrom must be absent by default"
 echo "render_test: OK"
