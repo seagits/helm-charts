@@ -1,0 +1,20 @@
+{{- if eq .Values.reach "vpc" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-vpc
+  labels:
+    {{- include "sg-db.labels" . | nindent 4 }}
+    seagit.io/report-address: "true"
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internal
+spec:
+  type: LoadBalancer
+  selector: {{- include "sg-db.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: db
+      port: {{ include "sg-db.port" . }}
+      targetPort: db
+{{- end }}

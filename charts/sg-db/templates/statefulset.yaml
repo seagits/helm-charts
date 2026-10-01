@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "sg-db.labels" . | nindent 4 }}
+    {{- with .Values.seagit.deploymentId }}
+    seagit.io/deployment: {{ . }}
+    {{- end }}
+spec:
+  serviceName: {{ .Release.Name }}
+  replicas: 1
+  selector:
+    matchLabels: {{- include "sg-db.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "sg-db.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        fsGroup: 999
+      {{- if .Values.avoidSpot }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node.kubernetes.io/lifecycle
+                    operator: NotIn
+                    values: [spot]
+      {{- end }}
+      containers:
+        - name: db
+          image: {{ include "sg-db.image" . | quote }}
+          ports:
+            - name: db
+              containerPort: {{ include "sg-db.port" . }}
+          env:
+          {{- if eq .Values.engine "postgres" }}
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Release.Name }}-auth, key: ADMIN_PASSWORD } }
+            - name: APP_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Release.Name }}-auth, key: APP_PASSWORD } }
+            - name: APP_USER
+              value: {{ .Values.database.user | quote }}
+            - name: APP_DB
+              value: {{ .Values.database.name | quote }}
+          {{- else }}
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Release.Name }}-auth, key: ADMIN_PASSWORD } }
+            - name: MYSQL_DATABASE
+              value: {{ .Values.database.name | quote }}
+            - name: MYSQL_USER
+              value: {{ .Values.database.user | quote }}
+            - name: MYSQL_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Release.Name }}-auth, key: APP_PASSWORD } }
+          {{- end }}
+          readinessProbe:
+            exec:
+              command:
+              {{- if eq .Values.engine "postgres" }}
+                ["pg_isready", "-U", "postgres", "-h", "127.0.0.1"]
+              {{- else }}
+                ["sh", "-c", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$MYSQL_ROOT_PASSWORD\""]
+              {{- end }}
+            periodSeconds: 10
+            failureThreshold: 30
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+            {{- if eq .Values.engine "postgres" }}
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+            {{- else }}
+              mountPath: /var/lib/mysql
+              subPath: mysql
+            {{- end }}
+      {{- if eq .Values.engine "postgres" }}
+      volumes:
+        - name: initdb
+          configMap: { name: {{ .Release.Name }}-initdb, defaultMode: 0555 }
+      {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels: {{- include "sg-db.selectorLabels" . | nindent 10 }}
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.storage.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}

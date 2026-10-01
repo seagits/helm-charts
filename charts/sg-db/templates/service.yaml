@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+  labels: {{- include "sg-db.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector: {{- include "sg-db.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: db
+      port: {{ include "sg-db.port" . }}
+      targetPort: db
