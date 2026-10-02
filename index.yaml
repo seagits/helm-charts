@@ -361,6 +361,21 @@ entries:
   sg-db:
   - apiVersion: v2
     appVersion: "1"
+    created: "2026-10-02T04:21:17.206479433Z"
+    description: Seagit Database stack — one Postgres or MySQL instance with nightly
+      S3 backups
+    digest: a44a372b45312be7b4ce91e750465be67e6bc56b69868949d5e8562cd13ead79
+    maintainers:
+    - email: contact@seagit.com
+      name: Seagit
+      url: https://charts.seagit.com
+    name: sg-db
+    type: application
+    urls:
+    - https://github.com/seagits/helm-charts/releases/download/sg-db-0.1.1/sg-db-0.1.1.tgz
+    version: 0.1.1
+  - apiVersion: v2
+    appVersion: "1"
     created: "2026-10-02T03:31:25.276385535Z"
     description: Seagit Database stack — one Postgres or MySQL instance with nightly
       S3 backups
@@ -374,4 +389,4 @@ entries:
     urls:
     - https://github.com/seagits/helm-charts/releases/download/sg-db-0.1.0/sg-db-0.1.0.tgz
     version: 0.1.0
-generated: "2026-10-02T03:31:25.276427197Z"
+generated: "2026-10-02T04:21:17.206547705Z"
