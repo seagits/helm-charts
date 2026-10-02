@@ -1,0 +1,13 @@
+# CI only: no S3 in the kind cluster, so no backup hooks; kind's default storage class; no spot label.
+auth:
+  adminPassword: ci-admin
+  appPassword: ci-app
+storage:
+  storageClass: ""
+  size: 1Gi
+avoidSpot: false
+backup:
+  bucket: ci-unused
+  region: us-east-1
+  firstBackup: false
+  onDelete: false

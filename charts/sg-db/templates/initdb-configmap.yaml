@@ -1,0 +1,20 @@
+{{- if eq .Values.engine "postgres" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-initdb
+  labels: {{- include "sg-db.labels" . | nindent 4 }}
+data:
+  10-app.sh: |
+    #!/bin/bash
+    # Runs once, on an empty data directory (docker-entrypoint-initdb.d).
+    set -euo pipefail
+    psql -v ON_ERROR_STOP=1 --username postgres --dbname postgres \
+      -v app_user="$APP_USER" -v app_password="$APP_PASSWORD" -v app_db="$APP_DB" <<'SQL'
+    CREATE ROLE :"app_user" LOGIN PASSWORD :'app_password';
+    CREATE DATABASE :"app_db" OWNER :"app_user";
+    REVOKE CONNECT ON DATABASE :"app_db" FROM PUBLIC;
+    GRANT CONNECT ON DATABASE :"app_db" TO :"app_user";
+    REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
+    SQL
+{{- end }}

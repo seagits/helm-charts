@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-backup-scripts
+  labels: {{- include "sg-db.labels" . | nindent 4 }}
+# No resource-policy annotation needed: Helm runs pre-delete hooks BEFORE it deletes the release's
+# resources, so this ConfigMap (and the Secret and ServiceAccount) still exist for the final backup.
+data:
+  dump.sh: |
+    #!/bin/bash
+    # Runs in the database image. Never fails the pod itself: the upload container decides.
+    set -uo pipefail
+    out=/work/dump.sql.gz
+    if [ "$ENGINE" = postgres ]; then
+      export PGPASSWORD="$ADMIN_PASSWORD"
+      if ! pg_isready -h "$DB_HOST" -p 5432 -t 10 >/dev/null 2>&1; then echo skipped > /work/rc; exit 0; fi
+      pg_dump -h "$DB_HOST" -U postgres -d "$DB_NAME" --no-owner --no-privileges 2>/work/err | gzip > "$out"
+    else
+      if ! mysqladmin ping -h "$DB_HOST" -uroot -p"$ADMIN_PASSWORD" --connect-timeout=10 >/dev/null 2>&1; then echo skipped > /work/rc; exit 0; fi
+      mysqldump -h "$DB_HOST" -uroot -p"$ADMIN_PASSWORD" --single-transaction --routines --triggers "$DB_NAME" 2>/work/err | gzip > "$out"
+    fi
+    echo "$?" > /work/rc
+    exit 0
+  upload.sh: |
+    #!/bin/bash
+    set -uo pipefail
+    ts=$(date -u +%Y%m%dT%H%M%SZ)
+    # A named KMS key encrypts every upload with it; empty = the bucket's default encryption.
+    sse=(); [ -n "${KMS_KEY_ID:-}" ] && sse=(--sse aws:kms --sse-kms-key-id "$KMS_KEY_ID")
+    rc=$(cat /work/rc 2>/dev/null || echo missing)
+    name="${ts}.sql.gz"; [ "$MODE" = final ] && name="final-${ts}.sql.gz"
+    err=$( (tail -c 400 /work/err 2>/dev/null || true) | tr '\n\r\t' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g')
+    status() { # ok skipped object size error
+      printf '{"time":"%s","mode":"%s","ok":%s,"skipped":"%s","object":"%s","size":%s,"error":"%s"}\n' \
+        "$ts" "$MODE" "$1" "$2" "$3" "$4" "$5" > /tmp/status.json
+      aws s3 cp /tmp/status.json "s3://${BUCKET}/${PREFIX}_status.json" ${sse[@]+"${sse[@]}"} --only-show-errors || true
+    }
+    if [ "$rc" = skipped ]; then
+      if [ "$MODE" = nightly ]; then status true "database not running" "" 0 ""; exit 0; fi
+      status false "" "" 0 "database not running — start the stack first, or use Delete anyway"
+      echo "database not running" >&2; exit 1
+    fi
+    if [ "$rc" != 0 ]; then status false "" "" 0 "dump failed (rc=$rc): $err"; echo "dump failed: $err" >&2; exit 1; fi
+    size=$(stat -c %s /work/dump.sql.gz)
+    if ! aws s3 cp /work/dump.sql.gz "s3://${BUCKET}/${PREFIX}${name}" ${sse[@]+"${sse[@]}"} --only-show-errors; then
+      status false "" "" "$size" "upload failed"; exit 1
+    fi
+    cutoff=$(date -u -d "-${RETENTION_DAYS} days" +%Y-%m-%dT%H:%M:%S)
+    # The folder is stripped literally (never used as a regex): only <prefix><ts>.sql.gz is pruned.
+    aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "$PREFIX" \
+      --query "Contents[?LastModified<'${cutoff}'].Key" --output text 2>/dev/null \
+      | tr '\t' '\n' | while read -r k; do
+          b=${k#"$PREFIX"}
+          if [[ "$k" == "$PREFIX"* && "$b" =~ ^[0-9]{8}T[0-9]{6}Z\.sql\.gz$ ]]; then
+            aws s3 rm "s3://${BUCKET}/${k}" --only-show-errors
+          fi
+        done
+    status true "" "${PREFIX}${name}" "$size" ""
+    echo "backup ok: s3://${BUCKET}/${PREFIX}${name} (${size} bytes)"

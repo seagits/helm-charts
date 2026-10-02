@@ -1,0 +1,61 @@
+# Engine: postgres | mysql
+engine: postgres
+
+images:
+  postgres: postgres:17
+  mysql: mysql:8.4
+  awscli: public.ecr.aws/aws-cli/aws-cli:2.27.0
+
+database:
+  name: app          # the app database (created on first start)
+  user: app          # the app user: full rights on database.name only
+
+auth:
+  adminPassword: ""  # required. Template: ${seagit.secrets.DB_ADMIN_PASSWORD}
+  appPassword: ""    # required. Template: ${seagit.secrets.DB_APP_PASSWORD}
+
+storage:
+  size: 20Gi
+  storageClass: ebs-csi-slow-del
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+# cluster: in-cluster Service only. vpc: also an internal NLB (never internet-facing).
+reach: cluster
+
+# Keep the database off spot nodes: its data is a zonal EBS volume (2026-09-27 qdrant incident).
+avoidSpot: true
+# PriorityClass for the database pod; "" = cluster default (0). Seagit sets seagit-stateful (created
+# by the platform, preemptionPolicy Never) so ordinary pods are evicted before the database is.
+priorityClassName: ""
+
+seagit:
+  deploymentId: ""   # ${seagit.app.deployment_id}: owner label so platform Stop/Start finds the StatefulSet
+
+serviceAccount:
+  name: ""           # ${seagit.app.sa_name}: the name the IRSA role trusts
+  roleArn: ""        # ${seagit.app.role_arn}
+
+backup:
+  bucket: ""         # ${stack_bucket.name}
+  region: ""         # ${stack_bucket.region}
+  prefix: backups/   # folder in the bucket, ends with /. Seagit: ${stack_bucket.prefix}
+  kmsKeyId: ""       # KMS key ARN to encrypt uploads with; "" = the bucket's default encryption.
+                     # Seagit: ${stack_bucket.kms_key_arn} (the key named for an existing bucket)
+  schedule: "0 3 * * *"
+  retentionDays: 7
+  onDelete: true     # false = "Delete anyway": the pre-delete hook becomes a no-op
+  firstBackup: true  # post-install backup. Keep true in production: it is also what makes the
+                     # platform deploy this chart through Tier B (install hooks). CI sets false.
+  activeDeadlineSeconds: 3600
+  # first/final backup hooks: must finish inside the worker's 600s Helm/Job wait (its SQS visibility is
+  # 900s, so it cannot wait longer). A database too big to dump in time: use Delete anyway.
+  hookDeadlineSeconds: 540
+  endpointUrl: ""    # tests only (an S3 stand-in); empty = real S3
+  extraEnvFromSecret: ""   # tests only: a Secret with AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY for an S3 stand-in

@@ -1,0 +1,15 @@
+{{- if .Values.backup.onDelete }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-backup-final
+  labels: {{- include "sg-db.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-delete
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ .Values.backup.hookDeadlineSeconds }}
+  template:
+    spec: {{- include "sg-db.backupPod" (dict "root" . "mode" "final") | nindent 6 }}
+{{- end }}
