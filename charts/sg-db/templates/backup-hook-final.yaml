@@ -3,7 +3,13 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ .Release.Name }}-backup-final
-  labels: {{- include "sg-db.labels" . | nindent 4 }}
+  labels:
+    {{- include "sg-db.labels" . | nindent 4 }}
+    {{- with .Values.seagit.deploymentId }}
+    # Owner label: a FAILED hook Job (kept for its logs; hook-delete-policy only removes successes)
+    # is deleted by the platform's owner-label destroy cleanup once the stack is deleted.
+    seagit.io/deployment: {{ . }}
+    {{- end }}
   annotations:
     "helm.sh/hook": pre-delete
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded

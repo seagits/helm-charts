@@ -2,7 +2,7 @@ apiVersion: v2
 name: sg-db
 description: Seagit Database stack — one Postgres or MySQL instance with nightly S3 backups
 type: application
-version: 0.1.0
+version: 0.1.1
 appVersion: "1"
 maintainers:
 - name: Seagit

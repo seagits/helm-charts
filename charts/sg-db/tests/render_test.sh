@@ -77,4 +77,9 @@ if render --set backup.kmsKeyId=not-an-arn >/dev/null 2>&1; then fail "bad kmsKe
 grep -q 'priorityClassName' <<<"$pg" && fail "default must not set a priorityClassName"
 pc=$(render --set priorityClassName=seagit-stateful)
 grep -A40 'kind: StatefulSet' <<<"$pc" | grep -q 'priorityClassName: seagit-stateful' || fail "StatefulSet priorityClassName"
+# --- backup hook Jobs carry the owner label (a failed final-backup Job left behind after Delete anyway
+# is removed by the platform's owner-label destroy cleanup; owner report 2026-10-02) ---
+for j in db1-backup-final db1-backup-first; do
+  grep -A8 "name: $j\$" <<<"$pg" | grep -q 'seagit.io/deployment: dep123' || fail "$j owner label"
+done
 echo "render_test: OK"
