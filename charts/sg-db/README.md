@@ -30,6 +30,7 @@ Seagit's Database Stack template; the platform fills the `${seagit.*}` values be
 | `serviceAccount.name` / `serviceAccount.roleArn` | — | Seagit: `${seagit.app.sa_name}` / `${seagit.app.role_arn}` |
 | `backup.bucket` / `backup.region` | — | required bucket; Seagit: `${stack_bucket.name}` / `${stack_bucket.region}` (the bucket's region) |
 | `backup.prefix` | `backups/` | folder the backups go in (ends with `/`); Seagit: `${stack_bucket.prefix}` — `backups/` in a new bucket, the chosen folder in an existing one |
+| `backup.kmsKeyId` | `""` | KMS key ARN every upload is encrypted with; empty = the bucket's default encryption. Seagit: `${stack_bucket.kms_key_arn}` (the key named for an existing bucket) |
 | `backup.schedule` | `0 3 * * *` | |
 | `backup.retentionDays` | `7` | the backup job prunes older dumps itself |
 | `backup.activeDeadlineSeconds` / `backup.hookDeadlineSeconds` | `3600` / `540` | nightly / first+final; the hooks must finish inside the Seagit worker's 600s window |

@@ -67,4 +67,10 @@ grep -q 's3://${BUCKET}/backups/' <<<"$pg" && fail "upload.sh still hard-codes b
 for bad in '' 'nofolder' '/abs/' 'a/../b/' 'a/*/' 'a//' './'; do
   if render --set "backup.prefix=$bad" >/dev/null 2>&1; then fail "bad backup.prefix accepted: '$bad'"; fi
 done
+# --- KMS key for uploads (review I2): the user-named key is used to encrypt, not just allowed ---
+grep -q 'name: KMS_KEY_ID, value: ""' <<<"$pg" || fail "default: no KMS key id (bucket default encryption)"
+grep -q -- '--sse-kms-key-id "$KMS_KEY_ID"' <<<"$pg" || fail "upload.sh must pass the key when set"
+kk=$(render --set backup.kmsKeyId=arn:aws:kms:us-east-1:111122223333:key/abcd-1234)
+grep -q 'name: KMS_KEY_ID, value: "arn:aws:kms:us-east-1:111122223333:key/abcd-1234"' <<<"$kk" || fail "kmsKeyId env"
+if render --set backup.kmsKeyId=not-an-arn >/dev/null 2>&1; then fail "bad kmsKeyId accepted"; fi
 echo "render_test: OK"

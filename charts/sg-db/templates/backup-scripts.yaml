@@ -25,13 +25,15 @@ data:
     #!/bin/bash
     set -uo pipefail
     ts=$(date -u +%Y%m%dT%H%M%SZ)
+    # A named KMS key encrypts every upload with it; empty = the bucket's default encryption.
+    sse=(); [ -n "${KMS_KEY_ID:-}" ] && sse=(--sse aws:kms --sse-kms-key-id "$KMS_KEY_ID")
     rc=$(cat /work/rc 2>/dev/null || echo missing)
     name="${ts}.sql.gz"; [ "$MODE" = final ] && name="final-${ts}.sql.gz"
     err=$( (tail -c 400 /work/err 2>/dev/null || true) | tr '\n\r\t' '   ' | sed 's/\\/\\\\/g; s/"/\\"/g')
     status() { # ok skipped object size error
       printf '{"time":"%s","mode":"%s","ok":%s,"skipped":"%s","object":"%s","size":%s,"error":"%s"}\n' \
         "$ts" "$MODE" "$1" "$2" "$3" "$4" "$5" > /tmp/status.json
-      aws s3 cp /tmp/status.json "s3://${BUCKET}/${PREFIX}_status.json" --only-show-errors || true
+      aws s3 cp /tmp/status.json "s3://${BUCKET}/${PREFIX}_status.json" ${sse[@]+"${sse[@]}"} --only-show-errors || true
     }
     if [ "$rc" = skipped ]; then
       if [ "$MODE" = nightly ]; then status true "database not running" "" 0 ""; exit 0; fi
@@ -40,7 +42,7 @@ data:
     fi
     if [ "$rc" != 0 ]; then status false "" "" 0 "dump failed (rc=$rc): $err"; echo "dump failed: $err" >&2; exit 1; fi
     size=$(stat -c %s /work/dump.sql.gz)
-    if ! aws s3 cp /work/dump.sql.gz "s3://${BUCKET}/${PREFIX}${name}" --only-show-errors; then
+    if ! aws s3 cp /work/dump.sql.gz "s3://${BUCKET}/${PREFIX}${name}" ${sse[@]+"${sse[@]}"} --only-show-errors; then
       status false "" "" "$size" "upload failed"; exit 1
     fi
     cutoff=$(date -u -d "-${RETENTION_DAYS} days" +%Y-%m-%dT%H:%M:%S)

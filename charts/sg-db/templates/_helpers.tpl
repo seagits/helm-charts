@@ -28,6 +28,10 @@ sg-db/engine: {{ .Values.engine }}
 {{- if not .Values.backup.bucket -}}
 {{- fail "backup.bucket is required (the stack's managed backup bucket)" -}}
 {{- end -}}
+{{- $k := toString .Values.backup.kmsKeyId -}}
+{{- if and $k (not (regexMatch "^arn:aws:kms:[a-z0-9-]+:[0-9]{12}:key/[A-Za-z0-9-]+$" $k)) -}}
+{{- fail "backup.kmsKeyId must be a KMS key ARN (arn:aws:kms:<region>:<account>:key/<id>) or empty" -}}
+{{- end -}}
 {{- $p := toString .Values.backup.prefix -}}
 {{- if or (not (regexMatch "^([A-Za-z0-9!_.'()-]+/)+$" $p)) (regexMatch "(^|/)[.]{1,2}/" $p) -}}
 {{- fail "backup.prefix must be a folder such as backups/ — letters, digits and !_.'()- only, ending with /" -}}
@@ -76,6 +80,7 @@ containers:
       - { name: BUCKET, value: {{ $root.Values.backup.bucket | quote }} }
       - { name: AWS_REGION, value: {{ $root.Values.backup.region | quote }} }
       - { name: PREFIX, value: {{ $root.Values.backup.prefix | quote }} }
+      - { name: KMS_KEY_ID, value: {{ $root.Values.backup.kmsKeyId | quote }} }
       - { name: RETENTION_DAYS, value: {{ $root.Values.backup.retentionDays | quote }} }
       {{- with $root.Values.backup.endpointUrl }}
       - { name: AWS_ENDPOINT_URL, value: {{ . | quote }} }

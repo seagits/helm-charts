@@ -43,6 +43,8 @@ backup:
   bucket: ""         # ${stack_bucket.name}
   region: ""         # ${stack_bucket.region}
   prefix: backups/   # folder in the bucket, ends with /. Seagit: ${stack_bucket.prefix}
+  kmsKeyId: ""       # KMS key ARN to encrypt uploads with; "" = the bucket's default encryption.
+                     # Seagit: ${stack_bucket.kms_key_arn} (the key named for an existing bucket)
   schedule: "0 3 * * *"
   retentionDays: 7
   onDelete: true     # false = "Delete anyway": the pre-delete hook becomes a no-op
