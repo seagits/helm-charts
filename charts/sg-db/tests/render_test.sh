@@ -59,4 +59,12 @@ grep -q 'envFrom' <<<"$pg" && fail "envFrom must be absent by default"
 grep -B2 -A40 'name: db1-backup-final' <<<"$pg" | grep -q 'activeDeadlineSeconds: 540' || fail "final hook deadline 540s"
 grep -B2 -A40 'name: db1-backup-first' <<<"$pg" | grep -q 'activeDeadlineSeconds: 540' || fail "first hook deadline 540s"
 grep -A30 'kind: CronJob' <<<"$pg" | grep -q 'activeDeadlineSeconds: 3600' || fail "nightly keeps 3600s"
+# --- backup prefix (backup destination spec §6) ---
+grep -q 'name: PREFIX, value: "backups/"' <<<"$pg" || fail "default backup prefix env"
+cust=$(render --set backup.prefix='seagit-backups/db1/')
+grep -q 'name: PREFIX, value: "seagit-backups/db1/"' <<<"$cust" || fail "custom backup prefix env"
+grep -q 's3://${BUCKET}/backups/' <<<"$pg" && fail "upload.sh still hard-codes backups/"
+for bad in '' 'nofolder' '/abs/' 'a/../b/' 'a/*/' 'a//' './'; do
+  if render --set "backup.prefix=$bad" >/dev/null 2>&1; then fail "bad backup.prefix accepted: '$bad'"; fi
+done
 echo "render_test: OK"

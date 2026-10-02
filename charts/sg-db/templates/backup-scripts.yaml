@@ -31,7 +31,7 @@ data:
     status() { # ok skipped object size error
       printf '{"time":"%s","mode":"%s","ok":%s,"skipped":"%s","object":"%s","size":%s,"error":"%s"}\n' \
         "$ts" "$MODE" "$1" "$2" "$3" "$4" "$5" > /tmp/status.json
-      aws s3 cp /tmp/status.json "s3://${BUCKET}/backups/_status.json" --only-show-errors || true
+      aws s3 cp /tmp/status.json "s3://${BUCKET}/${PREFIX}_status.json" --only-show-errors || true
     }
     if [ "$rc" = skipped ]; then
       if [ "$MODE" = nightly ]; then status true "database not running" "" 0 ""; exit 0; fi
@@ -40,13 +40,18 @@ data:
     fi
     if [ "$rc" != 0 ]; then status false "" "" 0 "dump failed (rc=$rc): $err"; echo "dump failed: $err" >&2; exit 1; fi
     size=$(stat -c %s /work/dump.sql.gz)
-    if ! aws s3 cp /work/dump.sql.gz "s3://${BUCKET}/backups/${name}" --only-show-errors; then
+    if ! aws s3 cp /work/dump.sql.gz "s3://${BUCKET}/${PREFIX}${name}" --only-show-errors; then
       status false "" "" "$size" "upload failed"; exit 1
     fi
     cutoff=$(date -u -d "-${RETENTION_DAYS} days" +%Y-%m-%dT%H:%M:%S)
-    aws s3api list-objects-v2 --bucket "$BUCKET" --prefix backups/ \
+    # The folder is stripped literally (never used as a regex): only <prefix><ts>.sql.gz is pruned.
+    aws s3api list-objects-v2 --bucket "$BUCKET" --prefix "$PREFIX" \
       --query "Contents[?LastModified<'${cutoff}'].Key" --output text 2>/dev/null \
-      | tr '\t' '\n' | grep -E '^backups/[0-9]{8}T[0-9]{6}Z\.sql\.gz$' \
-      | while read -r k; do aws s3 rm "s3://${BUCKET}/${k}" --only-show-errors; done
-    status true "" "backups/${name}" "$size" ""
-    echo "backup ok: s3://${BUCKET}/backups/${name} (${size} bytes)"
+      | tr '\t' '\n' | while read -r k; do
+          b=${k#"$PREFIX"}
+          if [[ "$k" == "$PREFIX"* && "$b" =~ ^[0-9]{8}T[0-9]{6}Z\.sql\.gz$ ]]; then
+            aws s3 rm "s3://${BUCKET}/${k}" --only-show-errors
+          fi
+        done
+    status true "" "${PREFIX}${name}" "$size" ""
+    echo "backup ok: s3://${BUCKET}/${PREFIX}${name} (${size} bytes)"

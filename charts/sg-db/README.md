@@ -28,7 +28,8 @@ Seagit's Database Stack template; the platform fills the `${seagit.*}` values be
 | `avoidSpot` | `true` | `node.kubernetes.io/lifecycle NotIn [spot]` |
 | `seagit.deploymentId` | — | Seagit: `${seagit.app.deployment_id}` |
 | `serviceAccount.name` / `serviceAccount.roleArn` | — | Seagit: `${seagit.app.sa_name}` / `${seagit.app.role_arn}` |
-| `backup.bucket` / `backup.region` | — | required bucket; Seagit: `${stack_bucket.name}` / `${ctx.region}` |
+| `backup.bucket` / `backup.region` | — | required bucket; Seagit: `${stack_bucket.name}` / `${stack_bucket.region}` (the bucket's region) |
+| `backup.prefix` | `backups/` | folder the backups go in (ends with `/`); Seagit: `${stack_bucket.prefix}` — `backups/` in a new bucket, the chosen folder in an existing one |
 | `backup.schedule` | `0 3 * * *` | |
 | `backup.retentionDays` | `7` | the backup job prunes older dumps itself |
 | `backup.activeDeadlineSeconds` / `backup.hookDeadlineSeconds` | `3600` / `540` | nightly / first+final; the hooks must finish inside the Seagit worker's 600s window |
@@ -38,7 +39,7 @@ Seagit's Database Stack template; the platform fills the `${seagit.*}` values be
 
 ## Backups
 
-Objects in `s3://<bucket>/backups/`: `<YYYYMMDDTHHMMSSZ>.sql.gz` (first and nightly, pruned after
+Objects in `s3://<bucket>/<prefix>`: `<YYYYMMDDTHHMMSSZ>.sql.gz` (first and nightly, pruned after
 `retentionDays`), `final-<timestamp>.sql.gz` (never pruned) and `_status.json`
 (`time, mode, ok, skipped, object, size, error`). While the database is down the nightly job writes
 `skipped` and exits 0; the first and final backups fail instead.
