@@ -358,4 +358,20 @@ entries:
     urls:
     - https://github.com/seagits/helm-charts/releases/download/rag-sync-0.1.0/rag-sync-0.1.0.tgz
     version: 0.1.0
-generated: "2026-09-29T18:14:18.524281314Z"
+  sg-db:
+  - apiVersion: v2
+    appVersion: "1"
+    created: "2026-10-02T03:31:25.276385535Z"
+    description: Seagit Database stack — one Postgres or MySQL instance with nightly
+      S3 backups
+    digest: 0be545a9fd7e6738f5ada6e7452890c249882b965fd6341f5c00b58ad5d5d492
+    maintainers:
+    - email: contact@seagit.com
+      name: Seagit
+      url: https://charts.seagit.com
+    name: sg-db
+    type: application
+    urls:
+    - https://github.com/seagits/helm-charts/releases/download/sg-db-0.1.0/sg-db-0.1.0.tgz
+    version: 0.1.0
+generated: "2026-10-02T03:31:25.276427197Z"
