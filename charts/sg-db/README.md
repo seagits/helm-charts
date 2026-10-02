@@ -26,6 +26,7 @@ Seagit's Database Stack template; the platform fills the `${seagit.*}` values be
 | `storage.size` / `storage.storageClass` | `20Gi` / `ebs-csi-slow-del` | |
 | `reach` | `cluster` | `cluster` or `vpc` |
 | `avoidSpot` | `true` | `node.kubernetes.io/lifecycle NotIn [spot]` |
+| `priorityClassName` | `""` | PriorityClass of the database pod; Seagit: `seagit-stateful` (platform-created, never preempts others) so ordinary pods are evicted before the database |
 | `seagit.deploymentId` | — | Seagit: `${seagit.app.deployment_id}` |
 | `serviceAccount.name` / `serviceAccount.roleArn` | — | Seagit: `${seagit.app.sa_name}` / `${seagit.app.role_arn}` |
 | `backup.bucket` / `backup.region` | — | required bucket; Seagit: `${stack_bucket.name}` / `${stack_bucket.region}` (the bucket's region) |

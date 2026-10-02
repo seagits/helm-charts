@@ -31,6 +31,9 @@ reach: cluster
 
 # Keep the database off spot nodes: its data is a zonal EBS volume (2026-09-27 qdrant incident).
 avoidSpot: true
+# PriorityClass for the database pod; "" = cluster default (0). Seagit sets seagit-stateful (created
+# by the platform, preemptionPolicy Never) so ordinary pods are evicted before the database is.
+priorityClassName: ""
 
 seagit:
   deploymentId: ""   # ${seagit.app.deployment_id}: owner label so platform Stop/Start finds the StatefulSet

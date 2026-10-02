@@ -73,4 +73,8 @@ grep -q -- '--sse-kms-key-id "$KMS_KEY_ID"' <<<"$pg" || fail "upload.sh must pas
 kk=$(render --set backup.kmsKeyId=arn:aws:kms:us-east-1:111122223333:key/abcd-1234)
 grep -q 'name: KMS_KEY_ID, value: "arn:aws:kms:us-east-1:111122223333:key/abcd-1234"' <<<"$kk" || fail "kmsKeyId env"
 if render --set backup.kmsKeyId=not-an-arn >/dev/null 2>&1; then fail "bad kmsKeyId accepted"; fi
+# --- priority class (staging 2026-10-02: a priority-0 DB pod was preempted by system pods) ---
+grep -q 'priorityClassName' <<<"$pg" && fail "default must not set a priorityClassName"
+pc=$(render --set priorityClassName=seagit-stateful)
+grep -A40 'kind: StatefulSet' <<<"$pc" | grep -q 'priorityClassName: seagit-stateful' || fail "StatefulSet priorityClassName"
 echo "render_test: OK"

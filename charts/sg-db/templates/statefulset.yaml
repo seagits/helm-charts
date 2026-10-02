@@ -16,6 +16,9 @@ spec:
     metadata:
       labels: {{- include "sg-db.selectorLabels" . | nindent 8 }}
     spec:
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
       securityContext:
         fsGroup: 999
       {{- if .Values.avoidSpot }}
