@@ -361,6 +361,25 @@ entries:
   sg-db:
   - apiVersion: v2
     appVersion: "1"
+    created: "2026-10-11T03:11:06.591978048Z"
+    dependencies:
+    - name: sg-stateful
+      repository: file://../sg-stateful
+      version: 0.1.0
+    description: Seagit Database stack — one Postgres or MySQL instance with nightly
+      S3 backups
+    digest: 0d27973d78be073081ba9ad42c123c5b51b5bc69a2f71e9d111906865fac27fc
+    maintainers:
+    - email: contact@seagit.com
+      name: Seagit
+      url: https://charts.seagit.com
+    name: sg-db
+    type: application
+    urls:
+    - https://github.com/seagits/helm-charts/releases/download/sg-db-0.2.0/sg-db-0.2.0.tgz
+    version: 0.2.0
+  - apiVersion: v2
+    appVersion: "1"
     created: "2026-10-02T04:21:17.206479433Z"
     description: Seagit Database stack — one Postgres or MySQL instance with nightly
       S3 backups
@@ -389,4 +408,41 @@ entries:
     urls:
     - https://github.com/seagits/helm-charts/releases/download/sg-db-0.1.0/sg-db-0.1.0.tgz
     version: 0.1.0
-generated: "2026-10-02T04:21:17.206547705Z"
+  sg-redis:
+  - apiVersion: v2
+    appVersion: "1"
+    created: "2026-10-11T03:11:06.759844976Z"
+    dependencies:
+    - name: sg-stateful
+      repository: file://../sg-stateful
+      version: 0.1.0
+    description: 'Seagit Redis stack: one Valkey or Redis instance (AOF), reachable
+      from the cluster, the VPC or the internet (TLS, optional IP allowlist), with
+      nightly S3 backups'
+    digest: 64cb55a88d362b1406df2aa4fafd2b2d360ef48817764449a244705d9005ece1
+    maintainers:
+    - email: contact@seagit.com
+      name: Seagit
+      url: https://charts.seagit.com
+    name: sg-redis
+    type: application
+    urls:
+    - https://github.com/seagits/helm-charts/releases/download/sg-redis-0.1.2/sg-redis-0.1.2.tgz
+    version: 0.1.2
+  sg-stateful:
+  - apiVersion: v2
+    created: "2026-10-11T03:11:06.924080085Z"
+    description: 'Seagit library chart — what the single-instance data stacks (sg-db,
+      sg-redis) share: labels, reach Services, the backup ServiceAccount, the backup
+      CronJob and first/final hook Jobs, and the S3 upload script'
+    digest: 777c73a3e39750858fa7a636e96bd7f3fa9d175d4ed9616cc9c9b1c3110115da
+    maintainers:
+    - email: contact@seagit.com
+      name: Seagit
+      url: https://charts.seagit.com
+    name: sg-stateful
+    type: library
+    urls:
+    - https://github.com/seagits/helm-charts/releases/download/sg-stateful-0.1.0/sg-stateful-0.1.0.tgz
+    version: 0.1.0
+generated: "2026-10-11T03:11:06.924130199Z"
