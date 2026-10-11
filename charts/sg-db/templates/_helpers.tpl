@@ -1,13 +1,6 @@
-{{- define "sg-db.selectorLabels" -}}
-app.kubernetes.io/name: sg-db
-app.kubernetes.io/instance: {{ .Release.Name }}
-{{- end }}
+{{- define "sg-db.selectorLabels" -}}{{ include "sg-stateful.selectorLabels" . }}{{- end }}
 
-{{- define "sg-db.labels" -}}
-{{ include "sg-db.selectorLabels" . }}
-app.kubernetes.io/managed-by: {{ .Release.Service }}
-sg-db/engine: {{ .Values.engine }}
-{{- end }}
+{{- define "sg-db.labels" -}}{{ include "sg-stateful.labels" . }}{{- end }}
 
 {{- define "sg-db.validate" -}}
 {{- if not (has .Values.engine (list "postgres" "mysql")) -}}
@@ -43,53 +36,33 @@ sg-db/engine: {{ .Values.engine }}
 {{- define "sg-db.adminUser" -}}{{ if eq .Values.engine "postgres" }}postgres{{ else }}root{{ end }}{{- end }}
 {{- define "sg-db.saName" -}}{{ default (printf "%s-backup" .Release.Name) .Values.serviceAccount.name }}{{- end }}
 
-{{/*
-One backup Pod. .mode: nightly | first | final.
-dump (database image) writes /work/dump.sql.gz and /work/rc ("0", "skipped", or the dump's exit code);
-upload (aws-cli image) uploads, prunes, writes backups/_status.json, and sets the exit code.
-*/}}
-{{- define "sg-db.backupPod" -}}
-{{- $root := .root -}}
-serviceAccountName: {{ include "sg-db.saName" $root }}
-restartPolicy: Never
-volumes:
-  - name: work
-    emptyDir: {}
-  - name: scripts
-    configMap: { name: {{ $root.Release.Name }}-backup-scripts, defaultMode: 0555 }
-initContainers:
-  - name: dump
-    image: {{ include "sg-db.image" $root | quote }}
-    command: ["/bin/bash", "/scripts/dump.sh"]
-    env:
-      - { name: ENGINE, value: {{ $root.Values.engine | quote }} }
-      - { name: DB_HOST, value: {{ printf "%s.%s.svc.cluster.local" $root.Release.Name $root.Release.Namespace | quote }} }
-      - { name: DB_NAME, value: {{ $root.Values.database.name | quote }} }
-      - name: ADMIN_PASSWORD
-        valueFrom: { secretKeyRef: { name: {{ $root.Release.Name }}-auth, key: ADMIN_PASSWORD } }
-    volumeMounts:
-      - { name: work, mountPath: /work }
-      - { name: scripts, mountPath: /scripts }
-containers:
-  - name: upload
-    image: {{ $root.Values.images.awscli | quote }}
-    command: ["/bin/bash", "/scripts/upload.sh"]
-    env:
-      - name: MODE
-        value: {{ .mode | quote }}
-      - { name: BUCKET, value: {{ $root.Values.backup.bucket | quote }} }
-      - { name: AWS_REGION, value: {{ $root.Values.backup.region | quote }} }
-      - { name: PREFIX, value: {{ $root.Values.backup.prefix | quote }} }
-      - { name: KMS_KEY_ID, value: {{ $root.Values.backup.kmsKeyId | quote }} }
-      - { name: RETENTION_DAYS, value: {{ $root.Values.backup.retentionDays | quote }} }
-      {{- with $root.Values.backup.endpointUrl }}
-      - { name: AWS_ENDPOINT_URL, value: {{ . | quote }} }
-      {{- end }}
-    {{- with $root.Values.backup.extraEnvFromSecret }}
-    envFrom:
-      - secretRef: { name: {{ . }} }
-    {{- end }}
-    volumeMounts:
-      - { name: work, mountPath: /work }
-      - { name: scripts, mountPath: /scripts }
+{{/* Arguments for the library's backup templates. */}}
+{{- define "sg-db.backupArgs" -}}
+dumpImage: {{ include "sg-db.image" . | quote }}
+dumpEnv: sg-db.dumpEnv
+{{- end }}
+
+{{- define "sg-db.dumpEnv" -}}
+- { name: ENGINE, value: {{ .Values.engine | quote }} }
+- { name: DB_HOST, value: {{ printf "%s.%s.svc.cluster.local" .Release.Name .Release.Namespace | quote }} }
+- { name: DB_NAME, value: {{ .Values.database.name | quote }} }
+- name: ADMIN_PASSWORD
+  valueFrom: { secretKeyRef: { name: {{ .Release.Name }}-auth, key: ADMIN_PASSWORD } }
+{{- end }}
+
+{{- define "sg-db.dumpScript" -}}
+#!/bin/bash
+# Runs in the database image. Never fails the pod itself: the upload container decides.
+set -uo pipefail
+out=/work/dump.sql.gz
+if [ "$ENGINE" = postgres ]; then
+  export PGPASSWORD="$ADMIN_PASSWORD"
+  if ! pg_isready -h "$DB_HOST" -p 5432 -t 10 >/dev/null 2>&1; then echo skipped > /work/rc; exit 0; fi
+  pg_dump -h "$DB_HOST" -U postgres -d "$DB_NAME" --no-owner --no-privileges 2>/work/err | gzip > "$out"
+else
+  if ! mysqladmin ping -h "$DB_HOST" -uroot -p"$ADMIN_PASSWORD" --connect-timeout=10 >/dev/null 2>&1; then echo skipped > /work/rc; exit 0; fi
+  mysqldump -h "$DB_HOST" -uroot -p"$ADMIN_PASSWORD" --single-transaction --routines --triggers "$DB_NAME" 2>/work/err | gzip > "$out"
+fi
+echo "$?" > /work/rc
+exit 0
 {{- end }}

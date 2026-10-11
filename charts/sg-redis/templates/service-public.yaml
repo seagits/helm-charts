@@ -1,0 +1,28 @@
+{{- if eq .Values.reach "public" }}
+{{- $cidrs := include "sg-redis.cidrs" . | fromJsonArray }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-public
+  labels:
+    {{- include "sg-stateful.labels" . | nindent 4 }}
+    seagit.io/report-address: "true"
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+    # external-dns publishes the per-cluster leaf; the platform points <dep>.<env domain> at it.
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.public.leafHost }}
+    # Raw TCP: a proxied (orange-cloud) record would break it on Cloudflare-managed zones.
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
+spec:
+  type: LoadBalancer
+  {{- with $cidrs }}
+  loadBalancerSourceRanges: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector: {{- include "sg-stateful.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: tls
+      port: 6379
+      targetPort: tls
+{{- end }}

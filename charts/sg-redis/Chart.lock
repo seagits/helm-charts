@@ -1,0 +1,6 @@
+dependencies:
+- name: sg-stateful
+  repository: file://../sg-stateful
+  version: 0.1.0
+digest: sha256:287fe1748f2fda84dcc14abeafb73361552148679d95e6ae5220d2713b8f377a
+generated: "2026-10-10T15:56:16.831599-04:00"

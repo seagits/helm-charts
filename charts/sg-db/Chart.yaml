@@ -2,9 +2,13 @@ apiVersion: v2
 name: sg-db
 description: Seagit Database stack — one Postgres or MySQL instance with nightly S3 backups
 type: application
-version: 0.1.1
+version: 0.2.0
 appVersion: "1"
 maintainers:
 - name: Seagit
   email: contact@seagit.com
   url: https://charts.seagit.com
+dependencies:
+- name: sg-stateful
+  version: 0.1.0
+  repository: file://../sg-stateful

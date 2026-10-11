@@ -1,0 +1,1 @@
+{{- include "sg-stateful.backupScripts" (dict "root" . "dumpScript" "sg-redis.dumpScript" "ext" "rdb.gz" "notRunning" "redis not running") }}

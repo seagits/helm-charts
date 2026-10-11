@@ -1,0 +1,122 @@
+{{- $size := include "sg-redis.size" . | fromJson }}
+{{- $public := eq .Values.reach "public" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "sg-stateful.labels" . | nindent 4 }}
+    {{- with .Values.seagit.deploymentId }}
+    seagit.io/deployment: {{ . }}
+    {{- end }}
+spec:
+  serviceName: {{ .Release.Name }}
+  replicas: 1
+  selector:
+    matchLabels: {{- include "sg-stateful.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "sg-stateful.selectorLabels" . | nindent 8 }}
+      annotations:
+        # Roll the pod when the server config changes (size, policy, reach).
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        runAsNonRoot: true
+        fsGroup: 999
+      {{- if .Values.avoidSpot }}
+      {{- include "sg-stateful.spotAffinity" . | nindent 6 }}
+      {{- end }}
+      containers:
+        - name: redis
+          image: {{ include "sg-redis.image" . | quote }}
+          command:
+            - sh
+            - -c
+            - |
+              umask 077
+              printf 'requirepass "%s"\n' "$REDIS_PASSWORD" > /run/redis/auth.conf
+              exec {{ include "sg-redis.server" . }} /etc/redis/redis.conf
+          ports:
+            - name: redis
+              containerPort: 6379
+            {{- if $public }}
+            - name: tls
+              containerPort: 6380
+            {{- end }}
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Release.Name }}-auth, key: PASSWORD } }
+            {{- include "sg-redis.cliAuthEnv" . | nindent 12 }}
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "{{ include "sg-redis.cli" . }} -p 6379 ping | grep -q PONG"]
+            periodSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            tcpSocket: { port: redis }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          resources: {{- toYaml $size.resources | nindent 12 }}
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: config, mountPath: /etc/redis }
+            - { name: run, mountPath: /run/redis }
+            {{- if $public }}
+            - { name: tls, mountPath: /tls, readOnly: true }
+            {{- end }}
+        {{- if $public }}
+        # cert-manager renews the secret in place; the kubelet swaps the mounted files. Re-setting the
+        # TLS file options makes the server reload them with no restart and no dropped connections.
+        - name: tls-reload
+          image: {{ include "sg-redis.image" . | quote }}
+          command:
+            - sh
+            - -c
+            - |
+              last=""
+              while true; do
+                cur=$(cat /tls/tls.crt /tls/tls.key 2>/dev/null | md5sum)
+                if [ -n "$last" ] && [ "$cur" != "$last" ]; then
+                  if {{ include "sg-redis.cli" . }} -p 6379 CONFIG SET tls-cert-file /tls/tls.crt tls-key-file /tls/tls.key; then
+                    echo "$(date -u +%FT%TZ) tls certificate reloaded"; last=$cur
+                  fi
+                else
+                  last=$cur
+                fi
+                sleep 60
+              done
+          env: {{- include "sg-redis.cliAuthEnv" . | nindent 12 }}
+          resources:
+            requests: { cpu: 5m, memory: 16Mi }
+            limits: { cpu: 50m, memory: 32Mi }
+          volumeMounts:
+            - { name: tls, mountPath: /tls, readOnly: true }
+        {{- end }}
+      volumes:
+        - name: config
+          configMap: { name: {{ .Release.Name }}-config }
+        - name: run
+          emptyDir: { medium: Memory, sizeLimit: 1Mi }
+        {{- if $public }}
+        - name: tls
+          secret: { secretName: {{ .Values.public.tlsSecret }} }
+        {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels: {{- include "sg-stateful.selectorLabels" . | nindent 10 }}
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.storage.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}

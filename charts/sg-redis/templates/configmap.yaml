@@ -1,0 +1,28 @@
+{{- $size := include "sg-redis.size" . | fromJson }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  labels: {{- include "sg-stateful.labels" . | nindent 4 }}
+data:
+  redis.conf: |
+    bind * -::*
+    port 6379
+    dir /data
+    appendonly yes
+    appendfsync everysec
+    save 3600 1 300 100 60 10000
+    maxmemory {{ $size.maxmemory }}
+    maxmemory-policy {{ .Values.evictionPolicy }}
+    maxclients {{ .Values.maxclients }}
+    # The password: written by the entrypoint from the Secret, never on the command line.
+    include /run/redis/auth.conf
+    {{- if eq .Values.reach "public" }}
+    # TLS for the public NLB (port 6379 there -> 6380 here). Plain 6379 stays for in-cluster use
+    # and is never behind the public load balancer.
+    tls-port 6380
+    tls-cert-file /tls/tls.crt
+    tls-key-file /tls/tls.key
+    tls-auth-clients no
+    tls-protocols "TLSv1.2 TLSv1.3"
+    {{- end }}

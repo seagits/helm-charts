@@ -1,0 +1,79 @@
+# Engine: valkey | redis (both speak the Redis protocol; every Redis client works with either)
+engine: valkey
+
+images:
+  valkey: valkey/valkey:8.1
+  redis: redis:8.2
+  awscli: public.ecr.aws/aws-cli/aws-cli:2.27.0
+
+auth:
+  password: ""       # required. Template: ${seagit.secrets.REDIS_PASSWORD}
+
+# small | medium | large: sets requests/limits and maxmemory (75% of the memory limit, leaving room
+# for the AOF-rewrite and backup fork).
+size: small
+sizes:
+  small:
+    resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 128Mi } }
+    maxmemory: 96mb
+  medium:
+    resources: { requests: { cpu: 100m, memory: 512Mi }, limits: { cpu: "1", memory: 512Mi } }
+    maxmemory: 384mb
+  large:
+    resources: { requests: { cpu: 250m, memory: 2Gi }, limits: { cpu: "2", memory: 2Gi } }
+    maxmemory: 1536mb
+
+# noeviction (a store: writes fail when full) | allkeys-lru | volatile-lru | allkeys-lfu
+evictionPolicy: noeviction
+# Cap on client connections; protects the pod from a connection flood (public reach).
+maxclients: 1000
+
+storage:
+  size: 2Gi
+  storageClass: ebs-csi-slow-del
+
+# cluster: in-cluster Service only. vpc: also an internal NLB. public: also an internet-facing NLB
+# (TLS only, optional IP allowlist, a platform DNS name).
+reach: cluster
+
+public:
+  # Comma-separated IPv4 CIDRs allowed to reach the public NLB. Empty = open to the internet
+  # (protected by TLS and the password only).
+  allowedCidrs: ""
+  # The per-cluster leaf name external-dns publishes for the NLB: ${seagit.app.leaf_host}. The
+  # platform points <dep>.<env domain> at it.
+  leafHost: ""
+  # The public name clients use: ${seagit.app.host} (<dep>.<env domain>).
+  host: ""
+  # TLS secret for the public name: ${seagit.app.tls_secret} — the cluster's wildcard for the env
+  # domain when it has one, else <dep>-tls. Renewed by cert-manager; Redis reloads it with no restart.
+  tlsSecret: ""
+  # ClusterIssuer that issues tlsSecret: ${seagit.app.cert_issuer}. "" = the secret already exists
+  # (the wildcard); set = this chart creates the Certificate (there is no Ingress for cert-manager's
+  # ingress-shim to do it).
+  certIssuer: ""
+
+# Keep Redis off spot nodes: its data is a zonal EBS volume.
+avoidSpot: true
+priorityClassName: ""
+
+seagit:
+  deploymentId: ""   # ${seagit.app.deployment_id}: owner label so platform Stop/Start finds the StatefulSet
+
+serviceAccount:
+  name: ""           # ${seagit.app.sa_name}
+  roleArn: ""        # ${seagit.app.role_arn}
+
+backup:
+  bucket: ""         # ${stack_bucket.name}
+  region: ""         # ${stack_bucket.region}
+  prefix: backups/   # ${stack_bucket.prefix}
+  kmsKeyId: ""       # ${stack_bucket.kms_key_arn}; "" = the bucket's default encryption
+  schedule: "0 3 * * *"
+  retentionDays: 7
+  onDelete: true     # false = "Delete anyway": the pre-delete hook is dropped
+  firstBackup: true  # post-install backup; also what makes the platform deploy through Tier B
+  activeDeadlineSeconds: 3600
+  hookDeadlineSeconds: 540
+  endpointUrl: ""    # tests only (an S3 stand-in)
+  extraEnvFromSecret: ""   # tests only

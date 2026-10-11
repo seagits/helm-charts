@@ -1,0 +1,24 @@
+{{- if and (eq .Values.reach "public") .Values.public.certIssuer }}
+# The certificate for the public name (and the per-cluster leaf). An app gets this from cert-manager's
+# ingress-shim; Redis has no Ingress, so the chart asks for it directly. Same issuer, same secret name.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Release.Name }}-tls
+  labels: {{- include "sg-stateful.labels" . | nindent 4 }}
+spec:
+  secretName: {{ .Values.public.tlsSecret }}
+  {{- with .Values.seagit.deploymentId }}
+  # cert-manager never deletes a Certificate's secret; the owner label lets the platform's
+  # owner-label destroy cleanup remove it with the stack (staging 2026-10-10: 4 orphaned secrets).
+  secretTemplate:
+    labels:
+      seagit.io/deployment: {{ . }}
+  {{- end }}
+  issuerRef:
+    kind: ClusterIssuer
+    name: {{ .Values.public.certIssuer }}
+  dnsNames:
+    - {{ .Values.public.host }}
+    - {{ .Values.public.leafHost }}
+{{- end }}
