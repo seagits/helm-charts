@@ -1,0 +1,1 @@
+{{- include "sg-stateful.serviceVpc" (dict "root" . "port" 6379 "portName" "redis") }}

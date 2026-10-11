@@ -1,0 +1,1 @@
+{{- include "sg-stateful.serviceCluster" (dict "root" . "port" 6379 "portName" "redis") }}

@@ -1,0 +1,1 @@
+{{- include "sg-stateful.backupCronJob" (include "sg-redis.backupArgs" . | fromYaml | merge (dict "root" .)) }}
