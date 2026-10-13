@@ -1,0 +1,14 @@
+apiVersion: v2
+name: sg-notebooks
+description: "Seagit Notebooks stack: a multi-user JupyterHub (Zero to JupyterHub) behind its own TLS load balancer, with SSO or shared-password sign-in, per-user EBS homes, IRSA access to the stack's S3 bucket and idle culling"
+type: application
+version: 0.1.0
+appVersion: "5.5.2"
+maintainers:
+- name: Seagit
+  email: contact@seagit.com
+  url: https://charts.seagit.com
+dependencies:
+- name: jupyterhub
+  version: 4.4.2
+  repository: https://hub.jupyter.org/helm-chart/
