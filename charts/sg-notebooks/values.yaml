@@ -65,12 +65,12 @@ jupyterhub:
       clientId: ""
       clientSecret: ""
       github:
-        organizations: "" # comma-separated: "acme" or "acme:data-science"
+        organizations: ""  # comma-separated: "acme" or "acme:data-science"
       oidc:
         issuer: ""        # https://acme.okta.com/oauth2/default
         usernameClaim: email
         groupsClaim: groups
-        allowedGroups: "" # comma-separated; empty = anyone the provider signs in
+        allowedGroups: ""  # comma-separated; empty = anyone the provider signs in
         adminGroups: ""
         extraScopes: ""   # e.g. "groups" for Okta
     # Which sizes developers can pick (comma-separated, first = default): xsmall, small, medium, large,
@@ -239,8 +239,8 @@ jupyterhub:
                 print("seagit: waiting for the proxy (its TLS certificate may still be issuing)", flush=True)
                 time.sleep(5)
     resources:
-      requests: { cpu: 50m, memory: 256Mi }
-      limits: { memory: 1Gi }
+      requests: {cpu: 50m, memory: 256Mi}
+      limits: {memory: 1Gi}
     db:
       pvc:
         storage: 1Gi
@@ -273,8 +273,8 @@ jupyterhub:
       loadBalancerSourceRanges: []
     chp:
       resources:
-        requests: { cpu: 25m, memory: 128Mi }
-        limits: { memory: 512Mi }
+        requests: {cpu: 25m, memory: 128Mi}
+        limits: {memory: 512Mi}
 
   singleuser:
     serviceAccountName: ""   # ${seagit.app.sa_name}
