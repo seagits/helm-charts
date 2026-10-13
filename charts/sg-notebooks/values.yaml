@@ -1,0 +1,321 @@
+# Seagit Notebooks: one JupyterHub per stack. The platform fills the ${...} values through the
+# template record's chart_args; everything else here is a safe default for a Seagit cluster.
+#
+# Two layers:
+#   - top-level keys: what THIS chart's own templates use (certificate, IRSA service account,
+#     cleanup hook, certificate-reload CronJob, validation);
+#   - jupyterhub: values for the upstream Zero to JupyterHub chart (4.4.2). The hub reads its
+#     Seagit settings from jupyterhub.custom (sign-in, sizes, images, bucket, spot) through the
+#     extraConfig below, so the record never writes Python.
+
+public:
+  # The name developers open: ${seagit.app.host} (<dep>.<env domain>). Must equal
+  # jupyterhub.proxy.https.hosts[0].
+  host: ""
+  # Per-cluster leaf external-dns publishes for the NLB: ${seagit.app.leaf_host}. Must equal the
+  # external-dns hostname annotation on jupyterhub.proxy.service.
+  leafHost: ""
+  # TLS secret the proxy serves: ${seagit.app.tls_secret}. Must equal
+  # jupyterhub.proxy.https.secret.name.
+  tlsSecret: ""
+  # ClusterIssuer for tlsSecret: ${seagit.app.cert_issuer}. "" = the secret already exists (the
+  # cluster's wildcard); set = this chart creates the Certificate.
+  certIssuer: ""
+  # The proxy reads its certificate once at start, so it is restarted on this schedule to pick up
+  # cert-manager renewals (renewal happens 30 days before expiry; a weekly restart is ample).
+  # Running servers keep running; open browser tabs reconnect within seconds.
+  certReloadSchedule: "17 6 * * 0"
+
+seagit:
+  deploymentId: ""   # ${seagit.app.deployment_id}: owner label on the certificate secret
+
+serviceAccount:
+  # The ServiceAccount every notebook server runs as. The platform's IRSA role trusts it and grants
+  # the stack bucket only. ${seagit.app.sa_name} / ${seagit.app.role_arn}.
+  name: ""
+  roleArn: ""
+
+images:
+  kubectl: registry.k8s.io/kubectl:v1.32.3
+
+cleanup:
+  # pre-delete: remove the notebook servers and home volumes the hub created (they are not part of
+  # the Helm release, so uninstall would otherwise leave them behind). false keeps the homes.
+  deleteHomes: true
+  activeDeadlineSeconds: 300
+
+jupyterhub:
+  # Release-prefixed names (<release>-notebooks-hub, <release>-notebooks-proxy-public): two hubs can share a
+  # namespace. The upstream default ("") would name everything plain "hub"/"proxy". The upstream
+  # helper drops the suffix when the release name CONTAINS it, so it must be longer than a dep name.
+  fullnameOverride: null
+  nameOverride: notebooks
+
+  # Seagit settings, read by hub.extraConfig.seagit below.
+  custom:
+    auth:
+      # password: shared passwords (trial). github: GitHub organization/team. oidc: any OpenID
+      # Connect provider (Okta, Entra ID, Google, Keycloak, Cognito).
+      type: password
+      admins: ""          # comma-separated usernames
+      allowedUsers: ""    # password mode: comma-separated usernames allowed to sign in
+      adminPassword: ""   # password mode, >= 32 chars (generated)
+      userPassword: ""    # password mode, >= 8 chars (generated)
+      callbackUrl: ""     # https://${seagit.app.host}/hub/oauth_callback
+      clientId: ""
+      clientSecret: ""
+      github:
+        organizations: ""  # comma-separated: "acme" or "acme:data-science"
+      oidc:
+        issuer: ""        # https://acme.okta.com/oauth2/default
+        usernameClaim: email
+        groupsClaim: groups
+        allowedGroups: ""  # comma-separated; empty = anyone the provider signs in
+        adminGroups: ""
+        extraScopes: ""   # e.g. "groups" for Okta
+    # Which sizes developers can pick (comma-separated, first = default): xsmall, small, medium, large,
+    # xlarge. A server's guaranteed memory must fit a node: X-Small 512 MB, Small 1 GB, Medium 2 GB.
+    sizes: small,medium,large
+    # Images developers can pick (comma-separated keys of imageCatalog, first = default). "custom"
+    # = customImage, the team's own image (e.g. in ECR); it must be based on a jupyter docker-stacks
+    # image (or run jupyterhub-singleuser).
+    images: scipy,pytorch
+    customImage: ""
+    imageCatalog:
+      scipy:
+        name: "Python data science (pandas, scikit-learn, matplotlib)"
+        image: quay.io/jupyter/scipy-notebook:2026-09-28
+      pytorch:
+        name: "PyTorch (CPU)"
+        image: quay.io/jupyter/pytorch-notebook:2026-09-28
+      datascience:
+        name: "Python, R and Julia"
+        image: quay.io/jupyter/datascience-notebook:2026-09-28
+    avoidSpot: true
+    bucket: ""            # ${stack_bucket.name}
+    region: ""            # ${stack_bucket.region}
+    # new: the whole stack bucket is the team's; existing: only this folder of the user's bucket
+    # (${form.backup_bucket_mode} / ${stack_bucket.prefix}).
+    bucketMode: new
+    prefix: ""
+
+  hub:
+    config:
+      JupyterHub:
+        # Don't spawn a server for an admin who just signs in to manage users.
+        redirect_to_server: false
+    extraConfig:
+      seagit: |
+        # Seagit Notebooks: sign-in, sizes, images, spot and bucket from jupyterhub.custom.
+        import json
+        import urllib.request
+        from z2jh import get_config
+
+        def _csv(v):
+            return [x.strip() for x in str(v or "").split(",") if x.strip()]
+
+        auth = get_config("custom.auth", {}) or {}
+        kind = auth.get("type", "password")
+        admins = set(_csv(auth.get("admins")))
+        if kind == "password":
+            c.JupyterHub.authenticator_class = "shared-password"
+            c.SharedPasswordAuthenticator.admin_password = auth["adminPassword"]
+            c.SharedPasswordAuthenticator.user_password = auth["userPassword"]
+            c.Authenticator.allowed_users = set(_csv(auth.get("allowedUsers")))
+        elif kind == "github":
+            c.JupyterHub.authenticator_class = "github"
+            c.GitHubOAuthenticator.client_id = auth["clientId"]
+            c.GitHubOAuthenticator.client_secret = auth["clientSecret"]
+            c.GitHubOAuthenticator.oauth_callback_url = auth["callbackUrl"]
+            c.GitHubOAuthenticator.allowed_organizations = set(_csv(auth["github"]["organizations"]))
+            c.GitHubOAuthenticator.scope = ["read:org"]
+        elif kind == "oidc":
+            o = auth["oidc"]
+            url = o["issuer"].rstrip("/") + "/.well-known/openid-configuration"
+            with urllib.request.urlopen(url, timeout=15) as r:
+                disc = json.load(r)
+            c.JupyterHub.authenticator_class = "generic-oauth"
+            g = c.GenericOAuthenticator
+            g.client_id = auth["clientId"]
+            g.client_secret = auth["clientSecret"]
+            g.oauth_callback_url = auth["callbackUrl"]
+            g.authorize_url = disc["authorization_endpoint"]
+            g.token_url = disc["token_endpoint"]
+            g.userdata_url = disc["userinfo_endpoint"]
+            g.scope = ["openid", "email", "profile"] + _csv(o.get("extraScopes"))
+            g.username_claim = o.get("usernameClaim") or "email"
+            g.login_service = "single sign-on"
+            groups_key = "oauth_user." + (o.get("groupsClaim") or "groups")
+            if _csv(o.get("allowedGroups")) or _csv(o.get("adminGroups")):
+                # oauthenticator 17: reading groups from the userinfo needs group management on
+                # (the hub mirrors the provider's groups; nothing else changes).
+                g.manage_groups = True
+                g.auth_state_groups_key = groups_key
+            if _csv(o.get("allowedGroups")):
+                g.allowed_groups = set(_csv(o["allowedGroups"]))
+            else:
+                g.allow_all = True
+            if _csv(o.get("adminGroups")):
+                g.admin_groups = set(_csv(o["adminGroups"]))
+        else:
+            raise ValueError("custom.auth.type must be password, github or oidc, got %r" % kind)
+        c.Authenticator.admin_users = admins
+
+        SIZES = {
+            "xsmall": ("X-Small", "0.5 vCPU, 2 GB", 0.1,  0.5, "512M", "2G"),
+            "small":  ("Small",  "1 vCPU, 4 GB",   0.25, 1, "1G", "4G"),
+            "medium": ("Medium", "2 vCPU, 8 GB",   0.5,  2, "2G", "8G"),
+            "large":  ("Large",  "4 vCPU, 16 GB",  1,    4, "4G", "16G"),
+            "xlarge": ("X-Large", "8 vCPU, 32 GB", 2,    8, "8G", "32G"),
+        }
+        catalog = get_config("custom.imageCatalog", {}) or {}
+        choices = {}
+        for i, key in enumerate(_csv(get_config("custom.images"))):
+            if key == "custom":
+                img = {"name": "Team image", "image": get_config("custom.customImage")}
+            else:
+                img = catalog.get(key) or {"name": key, "image": key}
+            choices[key.replace("/", "-").replace(":", "-").replace(".", "-")] = {
+                "display_name": img["name"],
+                "default": i == 0,
+                "kubespawner_override": {"image": img["image"]},
+            }
+        profiles = []
+        for i, key in enumerate(_csv(get_config("custom.sizes"))):
+            name, desc, cg, cl, mg, ml = SIZES[key]
+            p = {
+                "display_name": name,
+                "slug": key,
+                "description": desc,
+                "default": i == 0,
+                "kubespawner_override": {
+                    "cpu_guarantee": cg, "cpu_limit": cl,
+                    "mem_guarantee": mg, "mem_limit": ml,
+                },
+            }
+            if choices:
+                p["profile_options"] = {"image": {"display_name": "Image", "choices": choices}}
+            profiles.append(p)
+        c.KubeSpawner.profile_list = profiles
+
+        if get_config("custom.avoidSpot", True):
+            c.KubeSpawner.node_affinity_required = [
+                {"matchExpressions": [{"key": "node.kubernetes.io/lifecycle", "operator": "NotIn", "values": ["spot"]}]}
+            ]
+
+        # AWS access comes from the IRSA token (projected by EKS); notebooks get no Kubernetes API token.
+        c.KubeSpawner.automount_service_account_token = False
+
+        env = {}
+        bucket = get_config("custom.bucket")
+        if bucket:
+            prefix = ""
+            if get_config("custom.bucketMode", "new") == "existing":
+                prefix = str(get_config("custom.prefix") or "").lstrip("/")
+            env["SEAGIT_BUCKET"] = bucket
+            env["SEAGIT_PREFIX"] = prefix
+            env["SEAGIT_BUCKET_URI"] = "s3://" + bucket + "/" + prefix
+        region = get_config("custom.region")
+        if region:
+            env["AWS_REGION"] = region
+            env["AWS_DEFAULT_REGION"] = region
+        c.KubeSpawner.environment.update(env)
+
+        # The proxy serves TLS from the certificate secret, so on a first install it starts only once
+        # cert-manager has issued it (DNS-01: a few minutes). JupyterHub gives up on an unreachable
+        # proxy after ~20 s and the pod restarts into CrashLoopBackOff, so wait for it here instead
+        # (bounded below the liveness probe's 300 s delay + 300 s failures).
+        import socket
+        import time
+        from urllib.parse import urlparse
+
+        _api = urlparse(str(c.ConfigurableHTTPProxy.api_url))
+        _deadline = time.time() + 480
+        while _api.hostname and time.time() < _deadline:
+            try:
+                socket.create_connection((_api.hostname, _api.port or 8001), timeout=3).close()
+                break
+            except OSError:
+                print("seagit: waiting for the proxy (its TLS certificate may still be issuing)", flush=True)
+                time.sleep(5)
+    resources:
+      requests: {cpu: 50m, memory: 256Mi}
+      limits: {memory: 1Gi}
+    db:
+      pvc:
+        storage: 1Gi
+        storageClassName: ebs-csi-slow-del
+
+  proxy:
+    # TLS terminates in the proxy (configurable-http-proxy) from the platform's certificate secret;
+    # the NLB passes TCP through. type=secret needs no Traefik and no ACME.
+    https:
+      enabled: true
+      type: secret
+      hosts: []           # [${seagit.app.host}]
+      secret:
+        name: ""          # ${seagit.app.tls_secret}
+    service:
+      type: LoadBalancer
+      labels:
+        # The platform's load-balancer report reads this Service's address (lb_health / ready).
+        seagit.io/report-address: "true"
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+        # One proxy pod lives in one AZ. Without cross-zone, the NLB's IPs in the other AZs accept
+        # nothing until Route 53 drops them (found live: ~5 min after create, and again whenever the
+        # proxy moves AZ).
+        service.beta.kubernetes.io/aws-load-balancer-attributes: load_balancing.cross_zone.enabled=true
+        external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
+        # external-dns.alpha.kubernetes.io/hostname: ${seagit.app.leaf_host}  (set by the record)
+      loadBalancerSourceRanges: []
+    chp:
+      resources:
+        requests: {cpu: 25m, memory: 128Mi}
+        limits: {memory: 512Mi}
+
+  singleuser:
+    serviceAccountName: ""   # ${seagit.app.sa_name}
+    storage:
+      type: dynamic
+      capacity: 10Gi
+      dynamic:
+        storageClass: ebs-csi-slow-del
+    image:
+      name: quay.io/jupyter/scipy-notebook
+      tag: "2026-09-28"
+    defaultUrl: /lab
+    startTimeout: 600        # a large image on a fresh node can take minutes to pull
+    networkPolicy:
+      egressAllowRules:
+        # Notebooks often read from databases in the VPC; the cloud metadata server stays blocked.
+        privateIPs: false
+
+  # Stop idle servers. Homes are kept; a developer's next start reattaches them.
+  cull:
+    enabled: true
+    timeout: 3600
+    every: 300
+    users: false
+
+  # Nothing cluster-scoped: the platform installs releases with a namespace-scoped deployer.
+  scheduling:
+    userScheduler:
+      enabled: false
+    podPriority:
+      enabled: false
+    userPlaceholder:
+      enabled: false
+  prePuller:
+    hook:
+      enabled: false
+    continuous:
+      enabled: false
+  rbac:
+    create: true
+  ingress:
+    enabled: false
+  debug:
+    enabled: false

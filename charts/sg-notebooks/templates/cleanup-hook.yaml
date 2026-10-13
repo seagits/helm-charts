@@ -1,0 +1,87 @@
+{{- /*
+pre-delete: the hub creates one pod and one home volume per developer at run time. They are not in
+the Helm release, so `helm uninstall` would leave them running (and billing). This Job deletes the
+ones THIS hub made: KubeSpawner labels them app.kubernetes.io/instance=<release> and
+app.kubernetes.io/managed-by=kubespawner, which no other workload carries.
+*/ -}}
+{{- $selector := printf "app.kubernetes.io/instance=%s,app.kubernetes.io/managed-by=kubespawner" .Release.Name }}
+{{- $hook := dict "helm.sh/hook" "pre-delete" "helm.sh/hook-delete-policy" "before-hook-creation,hook-succeeded" }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-cleanup
+  labels: {{- include "sg-notebooks.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml $hook | nindent 4 }}
+    helm.sh/hook-weight: "-10"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-cleanup
+  labels: {{- include "sg-notebooks.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml $hook | nindent 4 }}
+    helm.sh/hook-weight: "-10"
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "delete", "deletecollection"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-cleanup
+  labels: {{- include "sg-notebooks.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml $hook | nindent 4 }}
+    helm.sh/hook-weight: "-10"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-cleanup
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-cleanup
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-cleanup
+  labels: {{- include "sg-notebooks.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml $hook | nindent 4 }}
+    helm.sh/hook-weight: "0"
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: {{ .Values.cleanup.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels: {{- include "sg-notebooks.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ .Release.Name }}-cleanup
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: cleanup
+          image: {{ .Values.images.kubectl }}
+          # One kubectl call (the image has no shell). Pods first so the volumes are released;
+          # --wait blocks until both are gone (pvc-protection holds a volume until its pod ends).
+          args:
+            - delete
+            - {{ if .Values.cleanup.deleteHomes }}pods,persistentvolumeclaims{{ else }}pods{{ end }}
+            - --namespace={{ .Release.Namespace }}
+            - --selector={{ $selector }}
+            - --ignore-not-found
+            - --wait=true
+            - --timeout={{ sub .Values.cleanup.activeDeadlineSeconds 30 }}s
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }
