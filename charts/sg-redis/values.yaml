@@ -14,13 +14,13 @@ auth:
 size: small
 sizes:
   small:
-    resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 128Mi } }
+    resources: {requests: {cpu: 50m, memory: 128Mi}, limits: {cpu: 500m, memory: 128Mi}}
     maxmemory: 96mb
   medium:
-    resources: { requests: { cpu: 100m, memory: 512Mi }, limits: { cpu: "1", memory: 512Mi } }
+    resources: {requests: {cpu: 100m, memory: 512Mi}, limits: {cpu: "1", memory: 512Mi}}
     maxmemory: 384mb
   large:
-    resources: { requests: { cpu: 250m, memory: 2Gi }, limits: { cpu: "2", memory: 2Gi } }
+    resources: {requests: {cpu: 250m, memory: 2Gi}, limits: {cpu: "2", memory: 2Gi}}
     maxmemory: 1536mb
 
 # noeviction (a store: writes fail when full) | allkeys-lru | volatile-lru | allkeys-lfu
@@ -56,6 +56,10 @@ public:
 # Keep Redis off spot nodes: its data is a zonal EBS volume.
 avoidSpot: true
 priorityClassName: ""
+# The node pool the release runs on, applied to the Redis pod AND the backup Jobs. Seagit sets
+# both from ${seagit.app.node_selector} / ${seagit.app.tolerations} (the environment's node pool).
+nodeSelector: {}
+tolerations: []
 
 seagit:
   deploymentId: ""   # ${seagit.app.deployment_id}: owner label so platform Stop/Start finds the StatefulSet

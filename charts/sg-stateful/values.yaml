@@ -1,0 +1,4 @@
+# sg-stateful is a library chart: it renders nothing itself and has no values of its own.
+# The parent chart (sg-db, sg-redis) supplies every value the templates read (contract in
+# templates/_stateful.tpl).
+{}

@@ -2,7 +2,7 @@ apiVersion: v2
 name: sg-stateful
 description: "Seagit library chart — what the single-instance data stacks (sg-db, sg-redis) share: labels, reach Services, the backup ServiceAccount, the backup CronJob and first/final hook Jobs, and the S3 upload script"
 type: library
-version: 0.1.0
+version: 0.2.0
 maintainers:
 - name: Seagit
   email: contact@seagit.com

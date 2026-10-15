@@ -55,6 +55,9 @@ spec:
         spec:
           serviceAccountName: {{ .Release.Name }}-cert-reload
           restartPolicy: Never
+          {{- if or .Values.nodeSelector .Values.tolerations }}
+          {{- include "sg-notebooks.placement" . | trim | nindent 10 }}
+          {{- end }}
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532

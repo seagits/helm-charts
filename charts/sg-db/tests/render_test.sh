@@ -82,4 +82,18 @@ grep -A40 'kind: StatefulSet' <<<"$pc" | grep -q 'priorityClassName: seagit-stat
 for j in db1-backup-final db1-backup-first; do
   grep -A8 "name: $j\$" <<<"$pg" | grep -q 'seagit.io/deployment: dep123' || fail "$j owner label"
 done
+# --- node pool placement: the worker renders ${seagit.app.node_selector|tolerations} as JSON flow
+# values; EVERY pod (data, nightly, first, final backup) must land on that pool (ops test 2026-10-15) ---
+placement_values=$(mktemp)
+cat >"$placement_values" <<'YAML'
+nodeSelector: {"cluster-autoscaler/pool":"builds"}
+tolerations: [{"effect":"NoSchedule","key":"cluster-autoscaler/pool","operator":"Equal","value":"builds"}]
+YAML
+pl=$(render -f "$placement_values")
+rm -f "$placement_values"
+[ "$(grep -c '^ *nodeSelector:$' <<<"$pl")" = 4 ] || fail "nodeSelector on all 4 pods"
+[ "$(grep -A1 '^ *nodeSelector:$' <<<"$pl" | grep -c 'cluster-autoscaler/pool: builds')" = 4 ] || fail "pool selector value"
+[ "$(grep -A1 '^ *tolerations:$' <<<"$pl" | grep -c 'effect: NoSchedule')" = 4 ] || fail "pool toleration on all 4 pods"
+grep -q 'key: node.kubernetes.io/lifecycle' <<<"$pl" || fail "placement must keep the off-spot affinity"
+grep -q -E 'nodeSelector:|tolerations:' <<<"$pg" && fail "default must not pin a pool"
 echo "render_test: OK"

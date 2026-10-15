@@ -113,4 +113,30 @@ refused "${oidc[@]}" --set jupyterhub.custom.auth.clientSecret= --set jupyterhub
 for pw in "$(printf 'A%.0s' {1..43})" "$(printf 'B%.0s' {1..43})"; do
   awk 'BEGIN{RS="\n---\n"} /kind: ConfigMap/' <<<"$out" | grep -q "$pw" && fail "password in a ConfigMap"
 done
+# --- node pool placement (ops test 2026-10-15): the record passes ${seagit.app.node_selector|tolerations}
+# (JSON flow values) to the chart's own pods AND the hub, proxy and notebook servers ---
+pl_tmp=$(mktemp)
+cat >"$pl_tmp" <<'YAML'
+nodeSelector: {"cluster-autoscaler/pool":"builds"}
+tolerations: [{"effect":"NoSchedule","key":"cluster-autoscaler/pool","operator":"Equal","value":"builds"}]
+jupyterhub:
+  hub:
+    nodeSelector: {"cluster-autoscaler/pool":"builds"}
+    tolerations: [{"effect":"NoSchedule","key":"cluster-autoscaler/pool","operator":"Equal","value":"builds"}]
+  proxy:
+    chp:
+      nodeSelector: {"cluster-autoscaler/pool":"builds"}
+      tolerations: [{"effect":"NoSchedule","key":"cluster-autoscaler/pool","operator":"Equal","value":"builds"}]
+  singleuser:
+    nodeSelector: {"cluster-autoscaler/pool":"builds"}
+    extraTolerations: [{"effect":"NoSchedule","key":"cluster-autoscaler/pool","operator":"Equal","value":"builds"}]
+YAML
+pl=$(render -f "$pl_tmp"); rm -f "$pl_tmp"
+for k in "Deployment nb1-notebooks-hub" "Deployment nb1-notebooks-proxy" "CronJob nb1-cert-reload" "Job nb1-cleanup"; do
+  d=$(out="$pl" doc ${k% *} ${k#* })
+  [ -n "$d" ] || fail "placement: no $k rendered"
+  grep -A1 'nodeSelector:$' <<<"$d" | grep -q 'cluster-autoscaler/pool: builds' || fail "placement: $k nodeSelector"
+  grep -q 'key: cluster-autoscaler/pool' <<<"$d" || fail "placement: $k toleration"
+done
+grep -q 'cluster-autoscaler/pool' <<<"$out" && fail "default must not pin a pool"
 echo "PASS"

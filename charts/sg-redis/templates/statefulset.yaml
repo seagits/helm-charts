@@ -29,6 +29,9 @@ spec:
         runAsGroup: 999
         runAsNonRoot: true
         fsGroup: 999
+      {{- if or .Values.nodeSelector .Values.tolerations }}
+      {{- include "sg-stateful.placement" . | trim | nindent 6 }}
+      {{- end }}
       {{- if .Values.avoidSpot }}
       {{- include "sg-stateful.spotAffinity" . | nindent 6 }}
       {{- end }}

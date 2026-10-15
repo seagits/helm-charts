@@ -38,6 +38,13 @@ serviceAccount:
 images:
   kubectl: registry.k8s.io/kubectl:v1.32.3
 
+# The node pool for the chart's own pods (certificate reload, cleanup hook). Seagit sets both from
+# ${seagit.app.node_selector} / ${seagit.app.tolerations}, and the same tokens on jupyterhub.hub,
+# jupyterhub.proxy.chp and jupyterhub.singleuser (nodeSelector, extraTolerations), so every pod of
+# the stack lands on the environment's pool.
+nodeSelector: {}
+tolerations: []
+
 cleanup:
   # pre-delete: remove the notebook servers and home volumes the hub created (they are not part of
   # the Helm release, so uninstall would otherwise leave them behind). false keeps the homes.
@@ -121,7 +128,10 @@ jupyterhub:
             c.JupyterHub.authenticator_class = "shared-password"
             c.SharedPasswordAuthenticator.admin_password = auth["adminPassword"]
             c.SharedPasswordAuthenticator.user_password = auth["userPassword"]
-            c.Authenticator.allowed_users = set(_csv(auth.get("allowedUsers")))
+            # Admins must be in the set themselves: JupyterHub only merges admin_users into a
+            # NON-empty allowed_users, so with no team usernames nobody (not even an admin) could
+            # sign in. (OAuthenticator allows admins on its own; only this mode needs it.)
+            c.Authenticator.allowed_users = set(_csv(auth.get("allowedUsers"))) | admins
         elif kind == "github":
             c.JupyterHub.authenticator_class = "github"
             c.GitHubOAuthenticator.client_id = auth["clientId"]

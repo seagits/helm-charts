@@ -63,6 +63,7 @@ jobs:
 
       # sg-notebooks needs a TLS secret and a load balancer to come up; its install is covered by
       # charts/sg-notebooks/tests/kind_test.sh, not by a default-values install here.
+      # sg-stateful is a library chart (not installable); sg-db and sg-redis install it.
       - name: Run chart-testing (install)
-        run: ct install --excluded-charts sg-notebooks --chart-repos jupyterhub=https://hub.jupyter.org/helm-chart/
+        run: ct install --excluded-charts sg-notebooks,sg-stateful --chart-repos jupyterhub=https://hub.jupyter.org/helm-chart/
 # https://github.com/marketplace/actions/helm-chart-testing
