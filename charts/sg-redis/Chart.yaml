@@ -2,7 +2,7 @@ apiVersion: v2
 name: sg-redis
 description: "Seagit Redis stack: one Valkey or Redis instance (AOF), reachable from the cluster, the VPC or the internet (TLS, optional IP allowlist), with nightly S3 backups"
 type: application
-version: 0.1.2
+version: 0.2.0
 appVersion: "1"
 maintainers:
 - name: Seagit
@@ -10,5 +10,5 @@ maintainers:
   url: https://charts.seagit.com
 dependencies:
 - name: sg-stateful
-  version: 0.1.0
+  version: 0.2.0
   repository: file://../sg-stateful

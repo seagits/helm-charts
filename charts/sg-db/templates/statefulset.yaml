@@ -21,6 +21,9 @@ spec:
       {{- end }}
       securityContext:
         fsGroup: 999
+      {{- if or .Values.nodeSelector .Values.tolerations }}
+      {{- include "sg-stateful.placement" . | trim | nindent 6 }}
+      {{- end }}
       {{- if .Values.avoidSpot }}
       affinity:
         nodeAffinity:

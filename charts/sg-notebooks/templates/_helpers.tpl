@@ -5,6 +5,19 @@ app.kubernetes.io/version: {{ .Chart.Version | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
+{{/*
+The node pool for the chart's own pods (certificate reload, cleanup hook). The hub, proxy and
+notebook servers take the same pool from jupyterhub.hub/proxy.chp/singleuser (set by the record).
+*/}}
+{{- define "sg-notebooks.placement" -}}
+{{- with .Values.nodeSelector }}
+nodeSelector: {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .Values.tolerations }}
+tolerations: {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- end }}
+
 {{- define "sg-notebooks.dnsRe" -}}^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?[.])+[a-z]{2,63}${{- end }}
 
 {{- define "sg-notebooks.csv" -}}

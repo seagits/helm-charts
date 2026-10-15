@@ -38,6 +38,13 @@ serviceAccount:
 images:
   kubectl: registry.k8s.io/kubectl:v1.32.3
 
+# The node pool for the chart's own pods (certificate reload, cleanup hook). Seagit sets both from
+# ${seagit.app.node_selector} / ${seagit.app.tolerations}, and the same tokens on jupyterhub.hub,
+# jupyterhub.proxy.chp and jupyterhub.singleuser (nodeSelector, extraTolerations), so every pod of
+# the stack lands on the environment's pool.
+nodeSelector: {}
+tolerations: []
+
 cleanup:
   # pre-delete: remove the notebook servers and home volumes the hub created (they are not part of
   # the Helm release, so uninstall would otherwise leave them behind). false keeps the homes.

@@ -2,7 +2,8 @@
 sg-stateful: shared parts of Seagit's single-instance data charts (sg-db, sg-redis).
 
 Contract — a chart that uses this library has these values (same meaning in every chart):
-  engine, reach (cluster | vpc | …), avoidSpot, priorityClassName, seagit.deploymentId,
+  engine, reach (cluster | vpc | …), avoidSpot, priorityClassName, nodeSelector, tolerations,
+  seagit.deploymentId,
   serviceAccount.{name,roleArn}, images.awscli, backup.{bucket,region,prefix,kmsKeyId,schedule,
   retentionDays,onDelete,firstBackup,activeDeadlineSeconds,hookDeadlineSeconds,endpointUrl,
   extraEnvFromSecret}
@@ -33,6 +34,20 @@ affinity:
             - key: node.kubernetes.io/lifecycle
               operator: NotIn
               values: [spot]
+{{- end }}
+
+{{/*
+The node pool the platform places the release on — Seagit sets both from ${seagit.app.node_selector}
+and ${seagit.app.tolerations} — applied to EVERY pod (the data and the backup Jobs), so nothing lands
+on a pool the environment did not choose. Empty: the pods schedule as before.
+*/}}
+{{- define "sg-stateful.placement" -}}
+{{- with .Values.nodeSelector }}
+nodeSelector: {{- toYaml . | nindent 2 }}
+{{- end }}
+{{- with .Values.tolerations }}
+tolerations: {{- toYaml . | nindent 2 }}
+{{- end }}
 {{- end }}
 
 {{/* Backup destination checks, shared by every chart's validate. */}}
@@ -173,6 +188,9 @@ template holding the dump container's env list).
 {{- $root := .root -}}
 serviceAccountName: {{ include "sg-stateful.saName" $root }}
 restartPolicy: Never
+{{- if or $root.Values.nodeSelector $root.Values.tolerations }}
+{{ include "sg-stateful.placement" $root | trim }}
+{{- end }}
 volumes:
   - name: work
     emptyDir: {}

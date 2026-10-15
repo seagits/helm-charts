@@ -56,6 +56,10 @@ public:
 # Keep Redis off spot nodes: its data is a zonal EBS volume.
 avoidSpot: true
 priorityClassName: ""
+# The node pool the release runs on, applied to the Redis pod AND the backup Jobs. Seagit sets
+# both from ${seagit.app.node_selector} / ${seagit.app.tolerations} (the environment's node pool).
+nodeSelector: {}
+tolerations: []
 
 seagit:
   deploymentId: ""   # ${seagit.app.deployment_id}: owner label so platform Stop/Start finds the StatefulSet
