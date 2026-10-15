@@ -67,7 +67,23 @@ auth = dict(base["auth"], admins="alice, ops", allowedUsers="bob,carol",
 c = run(dict(base, auth=auth, sizes="medium,small", images="pytorch,scipy", bucket="b1", region="eu-west-1"))
 check(c.JupyterHub.authenticator_class == "shared-password", "password: authenticator")
 check(c.SharedPasswordAuthenticator.admin_password == "A" * 43, "password: admin password")
-check(c.Authenticator.allowed_users == {"bob", "carol"}, "password: allowed users")
+check(c.Authenticator.allowed_users == {"bob", "carol", "alice", "ops"}, "password: allowed users = team + admins")
+
+
+def password_allowed(custom_auth, username):
+    """What the hub decides for `username` at sign-in, with JupyterHub's own check_allowed."""
+    from jupyterhub.authenticators.shared import SharedPasswordAuthenticator
+
+    a = SharedPasswordAuthenticator(config=run(dict(base, auth=custom_auth)))
+    return a.check_allowed(username, None)
+
+
+# no team usernames (the wizard leaves it optional): the admins can still sign in, nobody else
+solo = dict(auth, allowedUsers="")
+check(run(dict(base, auth=solo)).Authenticator.allowed_users == {"alice", "ops"}, "password: no team -> admins only")
+check(password_allowed(solo, "alice"), "password: admin allowed with no team usernames")
+check(not password_allowed(solo, "mallory"), "password: others refused with no team usernames")
+check(password_allowed(auth, "ops") and password_allowed(auth, "bob"), "password: admin and team allowed")
 check(c.Authenticator.admin_users == {"alice", "ops"}, "password: admins")
 p = c.KubeSpawner.profile_list
 check([x["slug"] for x in p] == ["medium", "small"], "profiles order")
