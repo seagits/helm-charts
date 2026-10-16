@@ -216,6 +216,7 @@ jupyterhub:
 
             from jupyterhub.auth import Authenticator
             from jupyterhub.handlers import BaseHandler
+            from jupyterhub.handlers.login import LogoutHandler
             from tornado import web
             from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 
@@ -295,19 +296,27 @@ jupyterhub:
                         "<p><a href='%slogin'>Sign in again</a></p></body></html>" % self.hub.base_url
                     )
 
+            class SeagitProxyLogout(LogoutHandler):
+                # Logout ends the sign-in proxy's session too (its cookie would sign the user
+                # straight back in), then lands on the signed-out page. With an existing Auth
+                # Proxy this signs the user out of every app behind it: they share one session.
+                # The same override OAuthenticator uses for its logout_redirect_url.
+                async def render_logout_page(self):
+                    self.redirect(signout_url, permanent=False)
+
             class SeagitProxyAuthenticator(Authenticator):
                 def get_handlers(self, app):
-                    return [("/login", SeagitProxyLogin), ("/signed-out", SeagitSignedOut)]
+                    return [
+                        ("/login", SeagitProxyLogin),
+                        ("/logout", SeagitProxyLogout),
+                        ("/signed-out", SeagitSignedOut),
+                    ]
 
                 async def authenticate(self, handler, data):
                     return None  # only through the sign-in proxy, never a form
 
             c.JupyterHub.authenticator_class = SeagitProxyAuthenticator
             c.Authenticator.allow_all = True  # the sign-in proxy decides who may sign in
-            # Logout ends the sign-in proxy's session too (its cookie would sign the user straight
-            # back in), then lands on the signed-out page. With an existing Auth Proxy this signs
-            # the user out of every app behind it: they share one session.
-            c.Authenticator.logout_redirect_url = signout_url
         else:
             raise ValueError("custom.auth.type must be password, github, oidc or proxy, got %r" % kind)
         c.Authenticator.admin_users = admins
