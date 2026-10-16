@@ -138,6 +138,9 @@ before anything is applied.
 {{- if not (regexMatch "^https://[A-Za-z0-9.-]+(:[0-9]+)?/[^\\s'\"]*$" (toString $p.signinUrl)) -}}
 {{- fail "existing Auth Proxy: custom.auth.proxy.signinUrl must be its https /oauth2/start URL" -}}
 {{- end -}}
+{{- if not (regexMatch "^https://[A-Za-z0-9.-]+(:[0-9]+)?/[^\\s'\"?#]*$" (toString $p.signoutUrl)) -}}
+{{- fail "existing Auth Proxy: custom.auth.proxy.signoutUrl must be its https /oauth2/sign_out URL" -}}
+{{- end -}}
 {{- else if eq (toString $p.mode) "new" -}}
 {{- $sp := .Values.signInProxy -}}
 {{- if not (has (toString $sp.provider) (list "oidc" "github" "google")) -}}

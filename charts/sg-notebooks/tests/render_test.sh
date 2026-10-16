@@ -151,6 +151,7 @@ jupyterhub:
         mode: existing
         authUrl: http://auth-application.idp.svc.cluster.local:4180/oauth2/auth
         signinUrl: https://auth.ns.example.com/oauth2/start
+        signoutUrl: https://auth.ns.example.com/oauth2/sign_out
         allowedGroups: "data science"
 YAML
 ex=$(render -f "$px")
@@ -159,6 +160,10 @@ grep -q 'kind: Deployment' <<<"$(out="$ex" doc Deployment nb1-notebooks-hub)" ||
 refused -f "$px" --set jupyterhub.custom.auth.proxy.authUrl="javascript:alert(1)"
 refused -f "$px" --set jupyterhub.custom.auth.proxy.signinUrl=http://auth.ns.example.com/oauth2/start
 refused -f "$px" --set jupyterhub.custom.auth.proxy.mode=other
+# 0.1.3: logout ends the Auth Proxy session, so its sign-out address is required and must be plain https
+refused -f "$px" --set jupyterhub.custom.auth.proxy.signoutUrl=
+refused -f "$px" --set jupyterhub.custom.auth.proxy.signoutUrl=http://auth.ns.example.com/oauth2/sign_out
+refused -f "$px" --set-string 'jupyterhub.custom.auth.proxy.signoutUrl=https://auth.ns.example.com/oauth2/sign_out?rd=https://evil.example'
 refused -f "$px" --set jupyterhub.custom.auth.proxy.usernameFrom=sub
 CSEC="client-secret-$(printf 'C%.0s' {1..30})"
 cat >"$px" <<YAML

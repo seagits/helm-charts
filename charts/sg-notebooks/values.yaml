@@ -99,6 +99,7 @@ jupyterhub:
         mode: ""
         authUrl: ""       # existing: the Auth Proxy's in-cluster /oauth2/auth
         signinUrl: ""     # existing: its public /oauth2/start
+        signoutUrl: ""    # existing: its public /oauth2/sign_out (logout ends the shared session)
         allowedGroups: ""  # existing: only these groups (checked by the Auth Proxy)
         adminGroups: ""   # members of these groups are hub admins (needs a groups claim)
         usernameFrom: email   # email | user (GitHub login)
@@ -225,8 +226,12 @@ jupyterhub:
                 # JupyterHub routes /services/auth/ on the hub's own address to the sign-in proxy
                 c.JupyterHub.services.append({"name": "auth", "url": base})
                 auth_url, signin_url = base + "/services/auth/auth", "/services/auth/start"
+                signout_url = "/services/auth/sign_out?rd=" + quote("/hub/signed-out", safe="")
             elif mode == "existing":
                 auth_url, signin_url = p["authUrl"], p["signinUrl"]
+                # oauth2-proxy sends people back only to its allowed domains, which cover this hub
+                hub = (get_config("proxy.https.hosts", []) or [""])[0]
+                signout_url = p["signoutUrl"] + "?rd=" + quote("https://%s/hub/signed-out" % hub, safe="")
                 groups = _csv(p.get("allowedGroups"))
                 if groups:
                     auth_url += ("&" if "?" in auth_url else "?") + "allowed_groups=" + ",".join(
@@ -273,15 +278,36 @@ jupyterhub:
                     self.set_login_cookie(user)
                     self.redirect(self.get_next_url(user))
 
+            class SeagitSignedOut(BaseHandler):
+                # Where logout lands. Needs no sign-in, and does not start one: landing on a hub
+                # page instead would go through the provider's still-open session and sign the
+                # user straight back in.
+                def get(self):
+                    self.set_header("Content-Type", "text/html; charset=utf-8")
+                    self.set_header("Cache-Control", "no-store")
+                    self.finish(
+                        "<!doctype html><html><head><meta charset='utf-8'>"
+                        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+                        "<title>Signed out</title></head>"
+                        "<body style='font-family:system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem'>"
+                        "<h1 style='font-size:1.4rem'>You are signed out</h1>"
+                        "<p>Your notebook server keeps running until it is idle.</p>"
+                        "<p><a href='%slogin'>Sign in again</a></p></body></html>" % self.hub.base_url
+                    )
+
             class SeagitProxyAuthenticator(Authenticator):
                 def get_handlers(self, app):
-                    return [("/login", SeagitProxyLogin)]
+                    return [("/login", SeagitProxyLogin), ("/signed-out", SeagitSignedOut)]
 
                 async def authenticate(self, handler, data):
                     return None  # only through the sign-in proxy, never a form
 
             c.JupyterHub.authenticator_class = SeagitProxyAuthenticator
             c.Authenticator.allow_all = True  # the sign-in proxy decides who may sign in
+            # Logout ends the sign-in proxy's session too (its cookie would sign the user straight
+            # back in), then lands on the signed-out page. With an existing Auth Proxy this signs
+            # the user out of every app behind it: they share one session.
+            c.Authenticator.logout_redirect_url = signout_url
         else:
             raise ValueError("custom.auth.type must be password, github, oidc or proxy, got %r" % kind)
         c.Authenticator.admin_users = admins
