@@ -62,7 +62,9 @@ signInProxy:
   github:
     org: ""              # only members of this organization
     team: ""             # optional: only this team of it
-  emailDomains: "*"      # oidc/google: allowed email domains, comma-separated; * = any
+  emailDomains: "*"      # oidc: allowed email domains, comma-separated; * = any
+  google:
+    domains: ""          # google: required, e.g. acme.com (otherwise any Google account could sign in)
   allowedGroups: ""      # oidc: only these groups, comma-separated
   # Extra oauth2-proxy settings (OAUTH2_PROXY_* names only), e.g. OAUTH2_PROXY_SCOPE for extra
   # scopes or OAUTH2_PROXY_PROVIDER_CA_FILES for a private CA.

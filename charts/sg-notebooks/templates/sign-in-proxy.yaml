@@ -79,7 +79,7 @@ spec:
             {{- if ne $sp.provider "github" }}
             # PKCE for the providers that support it (GitHub OAuth apps are left as they are)
             - { name: OAUTH2_PROXY_CODE_CHALLENGE_METHOD, value: "S256" }
-            - { name: OAUTH2_PROXY_EMAIL_DOMAINS, value: {{ $sp.emailDomains | quote }} }
+            - { name: OAUTH2_PROXY_EMAIL_DOMAINS, value: {{ (eq $sp.provider "google" | ternary $sp.google.domains $sp.emailDomains) | quote }} }
             {{- end }}
             {{- range $k, $v := $sp.extraEnv }}
             - { name: {{ $k | quote }}, value: {{ $v | toString | quote }} }

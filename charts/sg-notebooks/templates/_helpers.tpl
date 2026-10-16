@@ -146,7 +146,7 @@ before anything is applied.
 {{- if not (and $sp.clientId $sp.clientSecret) -}}
 {{- fail "new sign-in: signInProxy.clientId and clientSecret are required" -}}
 {{- end -}}
-{{- if not (has (len (toString $sp.cookieSecret)) (list 16 24 32 44)) -}}
+{{- if not (has (len (toString $sp.cookieSecret)) (list 16 24 32 43 44)) -}}
 {{- fail "new sign-in: signInProxy.cookieSecret must be 16, 24 or 32 bytes (or 32 bytes base64)" -}}
 {{- end -}}
 {{- if and (eq $sp.provider "oidc") (not (regexMatch "^https://[^\\s'\"]+$" (toString $sp.oidc.issuer))) -}}
@@ -158,6 +158,12 @@ before anything is applied.
 {{- end -}}
 {{- if has $k (list "OAUTH2_PROXY_CLIENT_SECRET" "OAUTH2_PROXY_COOKIE_SECRET" "OAUTH2_PROXY_PROXY_PREFIX" "OAUTH2_PROXY_UPSTREAMS" "OAUTH2_PROXY_REDIRECT_URL" "OAUTH2_PROXY_HTTP_ADDRESS") -}}
 {{- fail (printf "signInProxy.extraEnv: %s is set by the chart" $k) -}}
+{{- end -}}
+{{- end -}}
+{{- if eq $sp.provider "google" -}}
+{{- $d := toString $sp.google.domains -}}
+{{- if or (not (trim $d)) (contains "*" $d) -}}
+{{- fail "new sign-in with Google needs your email domain(s), e.g. acme.com — otherwise any Google account could sign in" -}}
 {{- end -}}
 {{- end -}}
 {{- if and (eq $sp.provider "github") (not $sp.github.org) -}}

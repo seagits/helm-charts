@@ -198,7 +198,9 @@ refused -f "$px" --set signInProxy.cookieSecret=short
 refused -f "$px" --set signInProxy.github.org=
 refused -f "$px" --set signInProxy.provider=saml
 refused -f "$px" --set signInProxy.provider=oidc --set signInProxy.oidc.issuer=http://idp.example.com
-og=$(render -f "$px" --set signInProxy.provider=google --set signInProxy.emailDomains=acme.io)
+refused -f "$px" --set signInProxy.provider=google
+refused -f "$px" --set signInProxy.provider=google --set signInProxy.google.domains="*"
+og=$(render -f "$px" --set signInProxy.provider=google --set signInProxy.google.domains=acme.io)
 grep -q 'OAUTH2_PROXY_EMAIL_DOMAINS, value: "acme.io"' <<<"$(out="$og" doc Deployment nb1-notebooks-auth)" || fail "new google: email domains"
 grep -q 'OAUTH2_PROXY_CODE_CHALLENGE_METHOD, value: "S256"' <<<"$(out="$og" doc Deployment nb1-notebooks-auth)" || fail "new google: PKCE"
 grep -q 'OAUTH2_PROXY_CODE_CHALLENGE_METHOD' <<<"$dep" && fail "new github: no PKCE (GitHub OAuth apps)"
