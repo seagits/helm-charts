@@ -99,7 +99,7 @@ jupyterhub:
         mode: ""
         authUrl: ""       # existing: the Auth Proxy's in-cluster /oauth2/auth
         signinUrl: ""     # existing: its public /oauth2/start
-        allowedGroups: "" # existing: only these groups (checked by the Auth Proxy)
+        allowedGroups: ""  # existing: only these groups (checked by the Auth Proxy)
         adminGroups: ""   # members of these groups are hub admins (needs a groups claim)
         usernameFrom: email   # email | user (GitHub login)
       admins: ""          # comma-separated usernames
