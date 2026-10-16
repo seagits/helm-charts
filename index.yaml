@@ -430,6 +430,26 @@ entries:
   sg-notebooks:
   - apiVersion: v2
     appVersion: 5.5.2
+    created: "2026-10-16T03:10:21.11146486Z"
+    dependencies:
+    - name: jupyterhub
+      repository: https://hub.jupyter.org/helm-chart/
+      version: 4.4.2
+    description: 'Seagit Notebooks stack: a multi-user JupyterHub (Zero to JupyterHub)
+      behind its own TLS load balancer, with SSO or shared-password sign-in, per-user
+      EBS homes, IRSA access to the stack''s S3 bucket and idle culling'
+    digest: 9324335150d3d3fffb86e0430e3d198d641331b8fa1287ef80c97694bd0d9f40
+    maintainers:
+    - email: contact@seagit.com
+      name: Seagit
+      url: https://charts.seagit.com
+    name: sg-notebooks
+    type: application
+    urls:
+    - https://github.com/seagits/helm-charts/releases/download/sg-notebooks-0.1.2/sg-notebooks-0.1.2.tgz
+    version: 0.1.2
+  - apiVersion: v2
+    appVersion: 5.5.2
     created: "2026-10-15T21:56:05.747033338Z"
     dependencies:
     - name: jupyterhub
@@ -540,4 +560,4 @@ entries:
     urls:
     - https://github.com/seagits/helm-charts/releases/download/sg-stateful-0.1.0/sg-stateful-0.1.0.tgz
     version: 0.1.0
-generated: "2026-10-15T21:56:06.229852274Z"
+generated: "2026-10-16T03:10:21.111534685Z"
