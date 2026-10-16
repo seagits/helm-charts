@@ -37,6 +37,8 @@ serviceAccount:
 
 images:
   kubectl: registry.k8s.io/kubectl:v1.32.3
+  # oauth2-proxy (Seagit build, multi-arch) for jupyterhub.custom.auth.proxy.mode=new
+  signInProxy: public.ecr.aws/q6s1l7f2/sg-auth-proxy:0.1.0
 
 # The node pool for the chart's own pods (certificate reload, cleanup hook). Seagit sets both from
 # ${seagit.app.node_selector} / ${seagit.app.tolerations}, and the same tokens on jupyterhub.hub,
@@ -44,6 +46,32 @@ images:
 # the stack lands on the environment's pool.
 nodeSelector: {}
 tolerations: []
+
+# Sign-in proxy run BY THIS CHART when jupyterhub.custom.auth.type=proxy and auth.proxy.mode=new:
+# oauth2-proxy behind the hub's own address at /services/auth (JupyterHub routes it), so sign-in,
+# its callback and the session check all live on the hub's host; nothing else is exposed. Register
+# https://<public.host>/services/auth/callback as the redirect URL in your identity provider.
+signInProxy:
+  provider: oidc         # oidc | github | google
+  clientId: ""
+  clientSecret: ""       # stored in a Secret, never in the hub's config
+  cookieSecret: ""       # 32 random bytes, base64 (the platform generates it)
+  oidc:
+    issuer: ""           # https://acme.okta.com/oauth2/default
+    groupsClaim: groups
+  github:
+    org: ""              # only members of this organization
+    team: ""             # optional: only this team of it
+  emailDomains: "*"      # oidc: allowed email domains, comma-separated; * = any
+  google:
+    domains: ""          # google: required, e.g. acme.com (otherwise any Google account could sign in)
+  allowedGroups: ""      # oidc: only these groups, comma-separated
+  # Extra oauth2-proxy settings (OAUTH2_PROXY_* names only), e.g. OAUTH2_PROXY_SCOPE for extra
+  # scopes or OAUTH2_PROXY_PROVIDER_CA_FILES for a private CA.
+  extraEnv: {}
+  resources:
+    requests: {cpu: 10m, memory: 32Mi}
+    limits: {memory: 128Mi}
 
 cleanup:
   # pre-delete: remove the notebook servers and home volumes the hub created (they are not part of
@@ -62,8 +90,18 @@ jupyterhub:
   custom:
     auth:
       # password: shared passwords (trial). github: GitHub organization/team. oidc: any OpenID
-      # Connect provider (Okta, Entra ID, Google, Keycloak, Cognito).
+      # Connect provider (Okta, Entra ID, Google, Keycloak, Cognito). proxy: an oauth2-proxy signs
+      # people in; the hub asks it, server to server, who the browser's session belongs to (it never
+      # trusts identity headers, which a notebook could forge by calling the hub directly).
       type: password
+      proxy:
+        # new: this chart's own sign-in proxy (signInProxy above). existing: an Auth Proxy stack.
+        mode: ""
+        authUrl: ""       # existing: the Auth Proxy's in-cluster /oauth2/auth
+        signinUrl: ""     # existing: its public /oauth2/start
+        allowedGroups: ""  # existing: only these groups (checked by the Auth Proxy)
+        adminGroups: ""   # members of these groups are hub admins (needs a groups claim)
+        usernameFrom: email   # email | user (GitHub login)
       admins: ""          # comma-separated usernames
       allowedUsers: ""    # password mode: comma-separated usernames allowed to sign in
       adminPassword: ""   # password mode, >= 32 chars (generated)
@@ -167,8 +205,85 @@ jupyterhub:
                 g.allow_all = True
             if _csv(o.get("adminGroups")):
                 g.admin_groups = set(_csv(o["adminGroups"]))
+        elif kind == "proxy":
+            # An oauth2-proxy signs people in. The hub never trusts identity headers (a notebook
+            # server can reach the hub directly and could forge them): /hub/login forwards the
+            # browser's cookies to the proxy's /oauth2/auth, server to server, and signs in whoever
+            # the proxy says the session belongs to.
+            import os
+            from urllib.parse import quote, urlencode
+
+            from jupyterhub.auth import Authenticator
+            from jupyterhub.handlers import BaseHandler
+            from tornado import web
+            from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+
+            p = auth.get("proxy") or {}
+            mode = p.get("mode")
+            if mode == "new":
+                base = "http://%s-notebooks-auth:4180" % os.environ["HELM_RELEASE_NAME"]
+                # JupyterHub routes /services/auth/ on the hub's own address to the sign-in proxy
+                c.JupyterHub.services.append({"name": "auth", "url": base})
+                auth_url, signin_url = base + "/services/auth/auth", "/services/auth/start"
+            elif mode == "existing":
+                auth_url, signin_url = p["authUrl"], p["signinUrl"]
+                groups = _csv(p.get("allowedGroups"))
+                if groups:
+                    auth_url += ("&" if "?" in auth_url else "?") + "allowed_groups=" + ",".join(
+                        quote(g, safe="") for g in groups
+                    )
+            else:
+                raise ValueError("custom.auth.proxy.mode must be new or existing, got %r" % mode)
+            admin_groups = set(_csv(p.get("adminGroups")))
+            use_login = p.get("usernameFrom") == "user"
+            admin_names = {a.lower() for a in admins}
+
+            class SeagitProxyLogin(BaseHandler):
+                async def get(self):
+                    nxt = self.get_argument("next", "")
+                    tries = int(self.get_argument("sg_try", "0") or 0)
+                    cookie = self.request.headers.get("Cookie", "")
+                    resp = None
+                    if cookie:
+                        req = HTTPRequest(auth_url, headers={"Cookie": cookie}, request_timeout=10,
+                                          follow_redirects=False)
+                        try:
+                            resp = await AsyncHTTPClient().fetch(req, raise_error=False)
+                        except Exception as e:
+                            self.log.warning("seagit: the sign-in check failed: %s", e)
+                            raise web.HTTPError(502, "The sign-in service did not answer. Try again in a minute.")
+                    if resp is not None and resp.code == 403:
+                        raise web.HTTPError(403, "You are signed in, but your account may not use these notebooks.")
+                    if resp is None or resp.code not in (200, 202):
+                        if tries >= 2:  # signed in at the provider, still no session here: stop, don't loop
+                            raise web.HTTPError(401, "Sign-in did not complete. Close this tab and open the notebooks address again.")
+                        back = self.request.path + "?" + urlencode({"next": nxt, "sg_try": tries + 1})
+                        if signin_url.startswith("http"):  # another host: send the full address back
+                            back = "%s://%s%s" % (self.request.protocol, self.request.host, back)
+                        return self.redirect(signin_url + "?rd=" + quote(back, safe=""))
+                    h = resp.headers
+                    email = h.get("X-Auth-Request-Email", "")
+                    login = h.get("X-Auth-Request-User", "")
+                    name = (login if use_login else email) or email or login
+                    if not name:
+                        raise web.HTTPError(403, "The sign-in provider returned no user name.")
+                    in_groups = set(_csv(h.get("X-Auth-Request-Groups", "")))
+                    is_admin = name.lower() in admin_names or bool(in_groups & admin_groups)
+                    user = await self.auth_to_user({"name": name, "admin": is_admin})
+                    self.set_login_cookie(user)
+                    self.redirect(self.get_next_url(user))
+
+            class SeagitProxyAuthenticator(Authenticator):
+                def get_handlers(self, app):
+                    return [("/login", SeagitProxyLogin)]
+
+                async def authenticate(self, handler, data):
+                    return None  # only through the sign-in proxy, never a form
+
+            c.JupyterHub.authenticator_class = SeagitProxyAuthenticator
+            c.Authenticator.allow_all = True  # the sign-in proxy decides who may sign in
         else:
-            raise ValueError("custom.auth.type must be password, github or oidc, got %r" % kind)
+            raise ValueError("custom.auth.type must be password, github, oidc or proxy, got %r" % kind)
         c.Authenticator.admin_users = admins
 
         SIZES = {

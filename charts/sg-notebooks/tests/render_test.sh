@@ -139,4 +139,70 @@ for k in "Deployment nb1-notebooks-hub" "Deployment nb1-notebooks-proxy" "CronJo
   grep -q 'key: cluster-autoscaler/pool' <<<"$d" || fail "placement: $k toleration"
 done
 grep -q 'cluster-autoscaler/pool' <<<"$out" && fail "default must not pin a pool"
+# --- sign-in through an oauth2-proxy (custom.auth.type=proxy), 0.1.2 ---
+px=$(mktemp)
+cat >"$px" <<'YAML'
+jupyterhub:
+  custom:
+    auth:
+      type: proxy
+      admins: "alice@acme.io"
+      proxy:
+        mode: existing
+        authUrl: http://auth-application.idp.svc.cluster.local:4180/oauth2/auth
+        signinUrl: https://auth.ns.example.com/oauth2/start
+        allowedGroups: "data science"
+YAML
+ex=$(render -f "$px")
+grep -q 'notebooks-auth' <<<"$ex" && fail "existing Auth Proxy must not render a sign-in proxy"
+grep -q 'kind: Deployment' <<<"$(out="$ex" doc Deployment nb1-notebooks-hub)" || fail "existing: hub rendered"
+refused -f "$px" --set jupyterhub.custom.auth.proxy.authUrl="javascript:alert(1)"
+refused -f "$px" --set jupyterhub.custom.auth.proxy.signinUrl=http://auth.ns.example.com/oauth2/start
+refused -f "$px" --set jupyterhub.custom.auth.proxy.mode=other
+refused -f "$px" --set jupyterhub.custom.auth.proxy.usernameFrom=sub
+CSEC="client-secret-$(printf 'C%.0s' {1..30})"
+cat >"$px" <<YAML
+jupyterhub:
+  custom:
+    auth:
+      type: proxy
+      admins: "alice@acme.io"
+      proxy: { mode: new }
+signInProxy:
+  provider: github
+  clientId: Iv1.abc
+  clientSecret: $CSEC
+  cookieSecret: "$(printf 'k%.0s' {1..32})"
+  github: { org: acme, team: data }
+nodeSelector: {"cluster-autoscaler/pool":"builds"}
+tolerations: [{"effect":"NoSchedule","key":"cluster-autoscaler/pool","operator":"Equal","value":"builds"}]
+YAML
+nw=$(render -f "$px")
+dep=$(out="$nw" doc Deployment nb1-notebooks-auth)
+[ -n "$dep" ] || fail "new: sign-in proxy Deployment"
+grep -q 'OAUTH2_PROXY_PROXY_PREFIX, value: "/services/auth"' <<<"$dep" || fail "new: proxy prefix"
+grep -q "OAUTH2_PROXY_REDIRECT_URL, value: \"https://$host/services/auth/callback\"" <<<"$dep" || fail "new: callback on the hub host"
+grep -q 'OAUTH2_PROXY_UPSTREAMS, value: "static://202"' <<<"$dep" || fail "new: proxies nothing"
+grep -q 'OAUTH2_PROXY_GITHUB_ORG, value: "acme"' <<<"$dep" || fail "new: github org"
+grep -q 'OAUTH2_PROXY_GITHUB_TEAM, value: "data"' <<<"$dep" || fail "new: github team"
+grep -q 'OAUTH2_PROXY_EMAIL_DOMAINS' <<<"$dep" && fail "new github: no email-domain env"
+grep -A1 'nodeSelector:$' <<<"$dep" | grep -q 'cluster-autoscaler/pool: builds' || fail "new: sign-in proxy on the node pool"
+grep -q 'name: nb1-notebooks-auth$' <<<"$(out="$nw" doc Service nb1-notebooks-auth)" || fail "new: in-cluster service"
+grep -q 'type: ClusterIP' <<<"$(out="$nw" doc Service nb1-notebooks-auth)" || fail "new: never exposed on its own"
+grep -q "$CSEC" <<<"$dep" && fail "new: client secret in the Deployment"
+grep -q "$CSEC" <<<"$(out="$nw" doc Secret nb1-notebooks-auth)" || fail "new: client secret in its Secret"
+awk 'BEGIN{RS="\n---\n"} /kind: ConfigMap/' <<<"$nw" | grep -q "$CSEC" && fail "new: client secret in a ConfigMap"
+grep -q "$CSEC" <<<"$(out="$nw" doc Secret nb1-notebooks-hub)" && fail "new: client secret in the hub's config"
+refused -f "$px" --set signInProxy.clientSecret=
+refused -f "$px" --set signInProxy.cookieSecret=short
+refused -f "$px" --set signInProxy.github.org=
+refused -f "$px" --set signInProxy.provider=saml
+refused -f "$px" --set signInProxy.provider=oidc --set signInProxy.oidc.issuer=http://idp.example.com
+refused -f "$px" --set signInProxy.provider=google
+refused -f "$px" --set signInProxy.provider=google --set signInProxy.google.domains="*"
+og=$(render -f "$px" --set signInProxy.provider=google --set signInProxy.google.domains=acme.io)
+grep -q 'OAUTH2_PROXY_EMAIL_DOMAINS, value: "acme.io"' <<<"$(out="$og" doc Deployment nb1-notebooks-auth)" || fail "new google: email domains"
+grep -q 'OAUTH2_PROXY_CODE_CHALLENGE_METHOD, value: "S256"' <<<"$(out="$og" doc Deployment nb1-notebooks-auth)" || fail "new google: PKCE"
+grep -q 'OAUTH2_PROXY_CODE_CHALLENGE_METHOD' <<<"$dep" && fail "new github: no PKCE (GitHub OAuth apps)"
+rm -f "$px"
 echo "PASS"

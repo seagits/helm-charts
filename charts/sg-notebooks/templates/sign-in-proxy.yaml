@@ -1,0 +1,110 @@
+{{- $auth := .Values.jupyterhub.custom.auth -}}
+{{- if and (eq (toString $auth.type) "proxy") (eq (toString $auth.proxy.mode) "new") -}}
+{{- /*
+The stack's own sign-in proxy (jupyterhub.custom.auth.proxy.mode=new): oauth2-proxy, reached only
+through the hub's address at /services/auth (JupyterHub routes it), so sign-in, the provider's
+callback and the session check stay on the hub's host and nothing else is exposed. It answers the
+hub's server-to-server session check at /services/auth/auth; it proxies no traffic itself.
+*/ -}}
+{{- $sp := .Values.signInProxy -}}
+{{- $name := printf "%s-notebooks-auth" .Release.Name -}}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+  labels: {{- include "sg-notebooks.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  OAUTH2_PROXY_CLIENT_SECRET: {{ $sp.clientSecret | quote }}
+  OAUTH2_PROXY_COOKIE_SECRET: {{ $sp.cookieSecret | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels: {{- include "sg-notebooks.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $name }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        # a new client or cookie secret restarts the proxy
+        checksum/secret: {{ printf "%s/%s" $sp.clientSecret $sp.cookieSecret | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile: { type: RuntimeDefault }
+      {{- if or .Values.nodeSelector .Values.tolerations }}
+      {{- include "sg-notebooks.placement" . | trim | nindent 6 }}
+      {{- end }}
+      containers:
+        - name: oauth2-proxy
+          image: {{ .Values.images.signInProxy | quote }}
+          ports:
+            - { name: http, containerPort: 4180 }
+          envFrom:
+            - secretRef: { name: {{ $name }} }
+          env:
+            - { name: OAUTH2_PROXY_HTTP_ADDRESS, value: "0.0.0.0:4180" }
+            - { name: OAUTH2_PROXY_PROXY_PREFIX, value: "/services/auth" }
+            - { name: OAUTH2_PROXY_REDIRECT_URL, value: {{ printf "https://%s/services/auth/callback" .Values.public.host | quote }} }
+            # nothing is proxied: the hub only asks /services/auth/auth who a session belongs to
+            - { name: OAUTH2_PROXY_UPSTREAMS, value: "static://202" }
+            - { name: OAUTH2_PROXY_REVERSE_PROXY, value: "true" }
+            - { name: OAUTH2_PROXY_SET_XAUTHREQUEST, value: "true" }
+            - { name: OAUTH2_PROXY_SKIP_PROVIDER_BUTTON, value: "true" }
+            - { name: OAUTH2_PROXY_COOKIE_SECURE, value: "true" }
+            - { name: OAUTH2_PROXY_COOKIE_NAME, value: "_sg_notebooks" }
+            - { name: OAUTH2_PROXY_COOKIE_EXPIRE, value: "12h" }
+            - { name: OAUTH2_PROXY_CLIENT_ID, value: {{ $sp.clientId | quote }} }
+            - { name: OAUTH2_PROXY_PROVIDER, value: {{ $sp.provider | quote }} }
+            {{- if eq $sp.provider "oidc" }}
+            - { name: OAUTH2_PROXY_OIDC_ISSUER_URL, value: {{ $sp.oidc.issuer | quote }} }
+            - { name: OAUTH2_PROXY_OIDC_GROUPS_CLAIM, value: {{ $sp.oidc.groupsClaim | quote }} }
+            - { name: OAUTH2_PROXY_ALLOWED_GROUPS, value: {{ $sp.allowedGroups | quote }} }
+            {{- end }}
+            {{- if eq $sp.provider "github" }}
+            - { name: OAUTH2_PROXY_GITHUB_ORG, value: {{ $sp.github.org | quote }} }
+            - { name: OAUTH2_PROXY_GITHUB_TEAM, value: {{ $sp.github.team | quote }} }
+            {{- end }}
+            {{- if ne $sp.provider "github" }}
+            # PKCE for the providers that support it (GitHub OAuth apps are left as they are)
+            - { name: OAUTH2_PROXY_CODE_CHALLENGE_METHOD, value: "S256" }
+            - { name: OAUTH2_PROXY_EMAIL_DOMAINS, value: {{ (eq $sp.provider "google" | ternary $sp.google.domains $sp.emailDomains) | quote }} }
+            {{- end }}
+            {{- range $k, $v := $sp.extraEnv }}
+            - { name: {{ $k | quote }}, value: {{ $v | toString | quote }} }
+            {{- end }}
+          readinessProbe:
+            httpGet: { path: /ping, port: http }
+          livenessProbe:
+            httpGet: { path: /ping, port: http }
+            initialDelaySeconds: 10
+          resources: {{- toYaml $sp.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "sg-notebooks.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - { name: http, port: 4180, targetPort: http }
+{{- end }}

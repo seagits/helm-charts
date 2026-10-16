@@ -69,8 +69,8 @@ writes both, and a mismatch would serve one name and certify another.
 {{- if ne (toString $jh.singleuser.serviceAccountName) (toString .Values.serviceAccount.name) -}}
 {{- fail "jupyterhub.singleuser.serviceAccountName must equal serviceAccount.name" -}}
 {{- end -}}
-{{- if not (has $auth.type (list "password" "github" "oidc")) -}}
-{{- fail (printf "jupyterhub.custom.auth.type must be password, github or oidc, got %q" (toString $auth.type)) -}}
+{{- if not (has $auth.type (list "password" "github" "oidc" "proxy")) -}}
+{{- fail (printf "jupyterhub.custom.auth.type must be password, github, oidc or proxy, got %q" (toString $auth.type)) -}}
 {{- end -}}
 {{- if eq $auth.type "password" -}}
 {{- if lt (len (toString $auth.adminPassword)) 32 -}}
@@ -85,6 +85,8 @@ writes both, and a mismatch would serve one name and certify another.
 {{- if not (include "sg-notebooks.csv" $auth.admins | fromJsonArray) -}}
 {{- fail "password sign-in needs at least one admin username" -}}
 {{- end -}}
+{{- else if eq $auth.type "proxy" -}}
+{{- include "sg-notebooks.validateProxy" . -}}
 {{- else -}}
 {{- if not (and $auth.clientId $auth.clientSecret) -}}
 {{- fail (printf "%s sign-in needs custom.auth.clientId and clientSecret" $auth.type) -}}
@@ -118,5 +120,59 @@ writes both, and a mismatch would serve one name and certify another.
 {{- if not (or (eq . "custom") (hasKey $jh.custom.imageCatalog .) (regexMatch "^[a-z0-9.-]+(:[0-9]+)?/[a-z0-9._/-]+(:[A-Za-z0-9._-]+|@sha256:[a-f0-9]{64})$" .)) -}}
 {{- fail (printf "custom.images: %q is neither a catalog image (%s) nor a full image reference such as 123456789012.dkr.ecr.us-east-1.amazonaws.com/team/notebook:1.0" . (keys $jh.custom.imageCatalog | sortAlpha | join ", ")) -}}
 {{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Sign-in through an oauth2-proxy (custom.auth.type=proxy). The values reach the hub's Python as data
+and oauth2-proxy as environment, never as code, but a wrong one would lock everyone out, so refuse it
+before anything is applied.
+*/}}
+{{- define "sg-notebooks.validateProxy" -}}
+{{- $p := .Values.jupyterhub.custom.auth.proxy -}}
+{{- $url := "^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[^\\s'\"]*)?$" -}}
+{{- if eq (toString $p.mode) "existing" -}}
+{{- if not (regexMatch $url (toString $p.authUrl)) -}}
+{{- fail "existing Auth Proxy: custom.auth.proxy.authUrl must be its in-cluster /oauth2/auth URL" -}}
+{{- end -}}
+{{- if not (regexMatch "^https://[A-Za-z0-9.-]+(:[0-9]+)?/[^\\s'\"]*$" (toString $p.signinUrl)) -}}
+{{- fail "existing Auth Proxy: custom.auth.proxy.signinUrl must be its https /oauth2/start URL" -}}
+{{- end -}}
+{{- else if eq (toString $p.mode) "new" -}}
+{{- $sp := .Values.signInProxy -}}
+{{- if not (has (toString $sp.provider) (list "oidc" "github" "google")) -}}
+{{- fail (printf "signInProxy.provider must be oidc, github or google, got %q" (toString $sp.provider)) -}}
+{{- end -}}
+{{- if not (and $sp.clientId $sp.clientSecret) -}}
+{{- fail "new sign-in: signInProxy.clientId and clientSecret are required" -}}
+{{- end -}}
+{{- if not (has (len (toString $sp.cookieSecret)) (list 16 24 32 43 44)) -}}
+{{- fail "new sign-in: signInProxy.cookieSecret must be 16, 24 or 32 bytes (or 32 bytes base64)" -}}
+{{- end -}}
+{{- if and (eq $sp.provider "oidc") (not (regexMatch "^https://[^\\s'\"]+$" (toString $sp.oidc.issuer))) -}}
+{{- fail "new sign-in with OIDC needs an https issuer URL" -}}
+{{- end -}}
+{{- range $k, $v := $sp.extraEnv -}}
+{{- if not (regexMatch "^OAUTH2_PROXY_[A-Z0-9_]+$" $k) -}}
+{{- fail (printf "signInProxy.extraEnv: %q is not an OAUTH2_PROXY_* setting" $k) -}}
+{{- end -}}
+{{- if has $k (list "OAUTH2_PROXY_CLIENT_SECRET" "OAUTH2_PROXY_COOKIE_SECRET" "OAUTH2_PROXY_PROXY_PREFIX" "OAUTH2_PROXY_UPSTREAMS" "OAUTH2_PROXY_REDIRECT_URL" "OAUTH2_PROXY_HTTP_ADDRESS") -}}
+{{- fail (printf "signInProxy.extraEnv: %s is set by the chart" $k) -}}
+{{- end -}}
+{{- end -}}
+{{- if eq $sp.provider "google" -}}
+{{- $d := toString $sp.google.domains -}}
+{{- if or (not (trim $d)) (contains "*" $d) -}}
+{{- fail "new sign-in with Google needs your email domain(s), e.g. acme.com — otherwise any Google account could sign in" -}}
+{{- end -}}
+{{- end -}}
+{{- if and (eq $sp.provider "github") (not $sp.github.org) -}}
+{{- fail "new sign-in with GitHub needs an organization" -}}
+{{- end -}}
+{{- else -}}
+{{- fail (printf "custom.auth.proxy.mode must be new or existing, got %q" (toString $p.mode)) -}}
+{{- end -}}
+{{- if not (has (toString $p.usernameFrom) (list "email" "user")) -}}
+{{- fail "custom.auth.proxy.usernameFrom must be email or user" -}}
 {{- end -}}
 {{- end }}
