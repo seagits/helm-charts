@@ -1,0 +1,52 @@
+{{- if eq (toString .Values.public.exposure) "shared" }}
+{{- /*
+The hub on the cluster's shared entrance (0.1.6): no load balancer of its own. nginx serves this
+Ingress; on a cluster on the Gateway API (Envoy) the platform's route sync turns it into an HTTPRoute
+and its allowlist into a SecurityPolicy, from the same annotations. The proxy behind it speaks plain
+HTTP (jupyterhub.proxy.https.enabled=false); TLS ends here with the platform's secret.
+Hosts and DNS follow the platform's own apps: the hub's name and its per-cluster leaf, external-dns
+publishing the leaf only (the platform points the hub's name at it).
+*/ -}}
+{{- /* Allowed IPs; 0.0.0.0/0 anywhere in the list means anyone, so no allowlist at all */ -}}
+{{- $cidrs := include "sg-notebooks.csv" (toString .Values.public.allowedCidrs) | fromJsonArray -}}
+{{- if has "0.0.0.0/0" $cidrs }}{{ $cidrs = list }}{{ end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-notebooks
+  labels: {{- include "sg-notebooks.labels" . | nindent 4 }}
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.public.leafHost | quote }}
+    external-dns.alpha.kubernetes.io/ingress-hostname-source: annotation-only
+    external-dns.alpha.kubernetes.io/ttl: "60"
+    # kernels and terminals are websockets that sit idle between cells
+    nginx.ingress.kubernetes.io/proxy-read-timeout: {{ .Values.public.timeoutSeconds | quote }}
+    nginx.ingress.kubernetes.io/proxy-send-timeout: {{ .Values.public.timeoutSeconds | quote }}
+    # a notebook save sends the whole notebook
+    nginx.ingress.kubernetes.io/proxy-body-size: {{ .Values.public.maxUploadSize | quote }}
+    {{- if $cidrs }}
+    # Allowed IPs (the entrance sees the client's address: proxy protocol on nginx, client IP
+    # preservation on the Gateway API's NLB)
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ join "," $cidrs | quote }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.public.ingressClassName }}
+  tls:
+    - hosts:
+        - {{ .Values.public.host | quote }}
+        - {{ .Values.public.leafHost | quote }}
+      secretName: {{ .Values.public.tlsSecret }}
+  rules:
+    {{- range (list .Values.public.host .Values.public.leafHost) }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "jupyterhub.proxy-public.fullname" $ }}
+                port:
+                  number: 80  # the proxy's plain-HTTP port (https disabled)
+    {{- end }}
+{{- end }}

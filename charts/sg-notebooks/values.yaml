@@ -9,14 +9,14 @@
 #     extraConfig below, so the record never writes Python.
 
 public:
-  # The name developers open: ${seagit.app.host} (<dep>.<env domain>). Must equal
+  # The name developers open: ${seagit.app.host} (<dep>.<env domain>). dedicated: must equal
   # jupyterhub.proxy.https.hosts[0].
   host: ""
-  # Per-cluster leaf external-dns publishes for the NLB: ${seagit.app.leaf_host}. Must equal the
-  # external-dns hostname annotation on jupyterhub.proxy.service.
+  # Per-cluster leaf external-dns publishes: ${seagit.app.leaf_host} (shared: on the Ingress;
+  # dedicated: must equal the external-dns hostname annotation on jupyterhub.proxy.service).
   leafHost: ""
-  # TLS secret the proxy serves: ${seagit.app.tls_secret}. Must equal
-  # jupyterhub.proxy.https.secret.name.
+  # TLS secret for the hub's names: ${seagit.app.tls_secret} (shared: the Ingress's; dedicated: must
+  # equal jupyterhub.proxy.https.secret.name).
   tlsSecret: ""
   # ClusterIssuer for tlsSecret: ${seagit.app.cert_issuer}. "" = the secret already exists (the
   # cluster's wildcard); set = this chart creates the Certificate.
@@ -25,6 +25,24 @@ public:
   # cert-manager renewals (renewal happens 30 days before expiry; a weekly restart is ample).
   # Running servers keep running; open browser tabs reconnect within seconds.
   certReloadSchedule: "17 6 * * 0"
+  # How the hub is reached (0.1.6):
+  #   shared    (default): an Ingress on the cluster's shared entrance. nginx serves it; on a cluster
+  #             on the Gateway API (Envoy) the platform's route sync turns it into an HTTPRoute and an
+  #             allowlist SecurityPolicy. The proxy is a ClusterIP Service on plain HTTP; TLS ends at
+  #             the entrance. No load balancer of its own: no extra cost, no warm-up.
+  #   dedicated: the proxy's own internet-facing NLB, TLS in the proxy (the record supplies
+  #             jupyterhub.proxy.https + service for it), as before 0.1.6.
+  exposure: shared
+  # shared: the IngressClass of the shared entrance (route sync converts its Ingresses on Gateway API
+  # clusters, where the class is kept).
+  ingressClassName: nginx
+  # shared: Allowed IPs, comma-separated IPv4 CIDRs (whitelist-source-range; a SecurityPolicy on
+  # Envoy). "" or 0.0.0.0/0 = anyone (sign-in is still required).
+  allowedCidrs: ""
+  # shared: an idle kernel or terminal keeps its websocket open, so reads/sends may idle this long.
+  timeoutSeconds: 3600
+  # shared: largest request body (a notebook save sends the whole notebook).
+  maxUploadSize: 512m
 
 seagit:
   deploymentId: ""   # ${seagit.app.deployment_id}: owner label on the certificate secret
@@ -439,30 +457,20 @@ jupyterhub:
                     values: [spot]
 
   proxy:
-    # TLS terminates in the proxy (configurable-http-proxy) from the platform's certificate secret;
-    # the NLB passes TCP through. type=secret needs no Traefik and no ACME.
+    # public.exposure=shared (default): plain HTTP behind the shared entrance (templates/ingress.yaml),
+    # which ends TLS. public.exposure=dedicated: the record sets https (enabled, type secret, hosts
+    # [${seagit.app.host}], secret ${seagit.app.tls_secret}: TLS in the proxy, the NLB passes TCP
+    # through) and service (type LoadBalancer, label seagit.io/report-address for the platform's
+    # load-balancer report, the AWS NLB annotations incl. cross-zone — one proxy pod lives in one AZ —
+    # the external-dns leaf hostname, and loadBalancerSourceRanges = Allowed IPs).
     https:
-      enabled: true
+      enabled: false
       type: secret
-      hosts: []           # [${seagit.app.host}]
+      hosts: []
       secret:
-        name: ""          # ${seagit.app.tls_secret}
+        name: ""
     service:
-      type: LoadBalancer
-      labels:
-        # The platform's load-balancer report reads this Service's address (lb_health / ready).
-        seagit.io/report-address: "true"
-      annotations:
-        service.beta.kubernetes.io/aws-load-balancer-type: external
-        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
-        service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
-        # One proxy pod lives in one AZ. Without cross-zone, the NLB's IPs in the other AZs accept
-        # nothing until Route 53 drops them (found live: ~5 min after create, and again whenever the
-        # proxy moves AZ).
-        service.beta.kubernetes.io/aws-load-balancer-attributes: load_balancing.cross_zone.enabled=true
-        external-dns.alpha.kubernetes.io/cloudflare-proxied: "false"
-        # external-dns.alpha.kubernetes.io/hostname: ${seagit.app.leaf_host}  (set by the record)
-      loadBalancerSourceRanges: []
+      type: ClusterIP
     chp:
       resources:
         requests: {cpu: 25m, memory: 128Mi}

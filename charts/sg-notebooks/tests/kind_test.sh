@@ -43,11 +43,6 @@ jupyterhub:
     services: { kindtest: { api_token: "$TOKEN" } }
     loadRoles:
       kindtest: { services: [kindtest], scopes: [admin:users, admin:servers, access:servers, read:users] }
-  proxy:
-    https: { hosts: [$host], secret: { name: nb1-tls } }
-    service:
-      type: ClusterIP          # kind has no load balancer; EKS gets the NLB
-      annotations: { external-dns.alpha.kubernetes.io/hostname: $leaf }
   singleuser:
     serviceAccountName: k8s-kind-nb1
     storage: { capacity: 1Gi, dynamic: { storageClass: standard } }
@@ -60,18 +55,19 @@ helm install "$rel" "$chart" -n "$ns" -f "$work/values.yaml" --wait --timeout 10
   kubectl -n "$ns" get pods; kubectl -n "$ns" logs deploy/nb1-notebooks-hub --tail=60 || true; fail "install"; }
 echo "installed in $(( $(date +%s) - t0 ))s"
 restarts=$(kubectl -n "$ns" get pod -l component=hub -o jsonpath='{.items[0].status.containerStatuses[0].restartCount}')
-[ "$restarts" = 0 ] || fail "hub restarted $restarts time(s) while the certificate was missing"
+[ "$restarts" = 0 ] || fail "hub restarted $restarts time(s) during install"
 cluster_scoped=$( (helm get manifest "$rel" -n "$ns"; helm get hooks "$rel" -n "$ns") | grep -E '^kind: (ClusterRole|ClusterRoleBinding|PriorityClass|StorageClass|CustomResourceDefinition|Namespace)$' || true)
 [ -z "$cluster_scoped" ] || fail "cluster-scoped objects in the release: $cluster_scoped"
 
-kubectl -n "$ns" port-forward svc/nb1-notebooks-proxy-public 8443:443 >/dev/null 2>&1 & pf=$!
-export HUB=https://127.0.0.1:8443 TOKEN
-for i in $(seq 30); do curl -sk -o /dev/null "$HUB/hub/login" && break; sleep 1; done
+# Shared exposure (the 0.1.6 default): the proxy is plain HTTP behind the cluster's entrance, which
+# this cluster does not have; the hub is driven straight through the proxy. The entrance (nginx, or
+# Envoy through the Gateway API route sync) is tested by ingress_test.sh on the gateway rigs.
+kubectl -n "$ns" get ingress nb1-notebooks >/dev/null || fail "no Ingress for the shared entrance"
+kubectl -n "$ns" get svc nb1-notebooks-proxy-public -o jsonpath='{.spec.type}' | grep -qx ClusterIP || fail "proxy-public is not ClusterIP"
+kubectl -n "$ns" port-forward svc/nb1-notebooks-proxy-public 28080:80 >/dev/null 2>&1 & pf=$!
+export HUB=http://127.0.0.1:28080 TOKEN
+for i in $(seq 30); do curl -s -o /dev/null "$HUB/hub/login" && break; sleep 1; done
 c() { node "$here/hub_client.mjs" "$@"; }
-
-step "TLS from the secret"
-echo | openssl s_client -connect 127.0.0.1:8443 -servername "$host" 2>/dev/null | openssl x509 -noout -subject | grep -q "CN *= *$host" \
-  || fail "proxy does not serve the nb1-tls certificate"
 
 step "sign-in"
 [ "$(c login alice "$ADMIN_PW")" = ok ] || fail "admin sign-in"
@@ -98,6 +94,10 @@ jq -e '.spec.affinity.nodeAffinity.requiredDuringSchedulingIgnoredDuringExecutio
 step "run code + write to home"
 out=$(c run bob 'import os, torch; print(6*7, os.environ["SEAGIT_BUCKET"]); open(os.path.expanduser("~/persist.txt"),"w").write("kept")')
 grep -q '^42 env-nb-kind' <<<"$out" || fail "kernel output: $out"
+
+step "terminal + upload"
+[ "$(c term bob)" = term-42 ] || fail "terminal round trip"
+[ "$(c upload bob 5)" = 201 ] || fail "5 MiB upload through the contents API"
 
 step "home survives a restart"
 c stop bob >/dev/null
