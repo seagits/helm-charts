@@ -423,6 +423,20 @@ jupyterhub:
       pvc:
         storage: 1Gi
         storageClassName: ebs-csi-slow-del
+    # Keep the hub off spot nodes: its database is a zonal EBS volume, so a reclaimed spot node
+    # leaves the hub Pending until a spot node turns up in that same zone (found live 2026-10-19:
+    # down for 30+ minutes). The upstream core-pod affinity is off (scheduling.corePods below), so
+    # this is the hub's only affinity. "Spot allowed" stacks replace the list with one matching any
+    # node (nodeSelectorTerms are ORed; lists replace, never merge).
+    extraPodSpec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node.kubernetes.io/lifecycle
+                    operator: NotIn
+                    values: [spot]
 
   proxy:
     # TLS terminates in the proxy (configurable-http-proxy) from the platform's certificate secret;
@@ -480,6 +494,11 @@ jupyterhub:
 
   # Nothing cluster-scoped: the platform installs releases with a namespace-scoped deployer.
   scheduling:
+    # No hub.jupyter.org/node-purpose labels on platform nodes; "ignore" also leaves the hub pod
+    # free of a second affinity block (it would collide with hub.extraPodSpec.affinity above).
+    corePods:
+      nodeAffinity:
+        matchNodePurpose: ignore
     userScheduler:
       enabled: false
     podPriority:
