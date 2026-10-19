@@ -139,6 +139,31 @@ for k in "Deployment nb1-notebooks-hub" "Deployment nb1-notebooks-proxy" "CronJo
   grep -q 'key: cluster-autoscaler/pool' <<<"$d" || fail "placement: $k toleration"
 done
 grep -q 'cluster-autoscaler/pool' <<<"$out" && fail "default must not pin a pool"
+
+# --- the hub stays off spot (zonal database volume; ops 2026-10-19), 0.1.5 ---
+hubd=$(doc Deployment nb1-notebooks-hub)
+[ "$(grep -c '^      affinity:$' <<<"$hubd")" = 1 ] || fail "hub: exactly one affinity block"
+grep -A8 'requiredDuringSchedulingIgnoredDuringExecution' <<<"$hubd" | grep -q 'key: node.kubernetes.io/lifecycle' \
+  || fail "hub: required lifecycle affinity"
+grep -A10 'key: node.kubernetes.io/lifecycle' <<<"$hubd" | grep -q 'operator: NotIn' || fail "hub: NotIn spot"
+grep -q 'hub.jupyter.org/node-purpose' <<<"$hubd$(doc Deployment nb1-notebooks-proxy)" \
+  && fail "no upstream core node-purpose affinity on the hub or proxy"
+# "Spot allowed": the record replaces the term list with one any node matches
+sp_tmp=$(mktemp)
+cat >"$sp_tmp" <<'YAML'
+jupyterhub:
+  hub:
+    extraPodSpec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions: [{key: node.kubernetes.io/lifecycle, operator: Exists}]
+              - matchExpressions: [{key: node.kubernetes.io/lifecycle, operator: DoesNotExist}]
+YAML
+sp=$(out="$(render -f "$sp_tmp")" doc Deployment nb1-notebooks-hub); rm -f "$sp_tmp"
+grep -q 'operator: NotIn' <<<"$sp" && fail "spot allowed: NotIn spot must be gone"
+grep -q 'operator: DoesNotExist' <<<"$sp" || fail "spot allowed: any-node terms"
 # --- sign-in through an oauth2-proxy (custom.auth.type=proxy), 0.1.2 ---
 px=$(mktemp)
 cat >"$px" <<'YAML'
