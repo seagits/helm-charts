@@ -144,6 +144,11 @@ jupyterhub:
     # (${form.backup_bucket_mode} / ${stack_bucket.prefix}).
     bucketMode: new
     prefix: ""
+    # Python packages installed into every server's Python when it starts: space-separated names or
+    # name==version pins. Cloud-neutral: the stack's record picks them (on AWS: s3fs + boto3 for the
+    # bucket, mlflow-skinny with MLflow). A failed install never fails the start (log:
+    # /tmp/seagit-packages-install.log); it adds ~15 s.
+    serverPackages: ""
 
   hub:
     config:
@@ -380,6 +385,19 @@ jupyterhub:
             env["AWS_REGION"] = region
             env["AWS_DEFAULT_REGION"] = region
         c.KubeSpawner.environment.update(env)
+
+        # Packages the stack's record asks for, installed into the image's Python on every server
+        # start. The chart only accepts names and pins, so the command cannot carry anything else.
+        import re
+        pkgs = str(get_config("custom.serverPackages", "") or "").split()
+        bad = [x for x in pkgs if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*(\[[A-Za-z0-9,._-]+\])?(==[A-Za-z0-9.+!-]+)?", x)]
+        if bad:
+            raise ValueError("custom.serverPackages: not package names: %r" % bad)
+        if pkgs:
+            c.KubeSpawner.lifecycle_hooks = {"postStart": {"exec": {"command": [
+                "sh", "-c",
+                "pip install -q --no-cache-dir %s > /tmp/seagit-packages-install.log 2>&1 || true" % " ".join(pkgs),
+            ]}}}
 
         # The proxy serves TLS from the certificate secret, so on a first install it starts only once
         # cert-manager has issued it (DNS-01: a few minutes). JupyterHub gives up on an unreachable
