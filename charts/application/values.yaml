@@ -43,7 +43,7 @@ image:
   repository: nginx
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "1.28-alpine3.23-slim"
+  tag: "1.31-alpine3.23-slim"
 
 imagePullSecrets: []
 # imagePullSecrets:
