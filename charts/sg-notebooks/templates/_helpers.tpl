@@ -121,6 +121,12 @@ writes both, and a mismatch would serve one name and certify another.
 {{- fail (printf "custom.images: %q is neither a catalog image (%s) nor a full image reference such as 123456789012.dkr.ecr.us-east-1.amazonaws.com/team/notebook:1.0" . (keys $jh.custom.imageCatalog | sortAlpha | join ", ")) -}}
 {{- end -}}
 {{- end -}}
+{{- /* serverPackages end up in a shell command on every server: package names and pins only */ -}}
+{{- range (splitList " " (toString $jh.custom.serverPackages)) -}}
+{{- if and . (not (regexMatch "^[A-Za-z0-9][A-Za-z0-9._-]*(\\[[A-Za-z0-9,._-]+\\])?(==[A-Za-z0-9.+!-]+)?$" .)) -}}
+{{- fail (printf "custom.serverPackages: %q is not a package name or name==version" .) -}}
+{{- end -}}
+{{- end -}}
 {{- end }}
 
 {{/*
