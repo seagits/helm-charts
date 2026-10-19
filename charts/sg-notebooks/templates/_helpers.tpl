@@ -46,22 +46,57 @@ writes both, and a mismatch would serve one name and certify another.
 {{- if not .Values.public.tlsSecret -}}
 {{- fail "public.tlsSecret is required (the platform fills ${seagit.app.tls_secret})" -}}
 {{- end -}}
+{{- $cidr := "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])[.]){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])/([0-9]|[12][0-9]|3[0-2])$" -}}
+{{- $svc := $jh.proxy.service | default dict -}}
+{{- if eq (toString .Values.public.exposure) "dedicated" -}}
+{{- if not $jh.proxy.https.enabled -}}
+{{- fail "dedicated: jupyterhub.proxy.https.enabled must be true (TLS in the proxy)" -}}
+{{- end -}}
+{{- if ne (toString $svc.type) "LoadBalancer" -}}
+{{- fail "dedicated: jupyterhub.proxy.service.type must be LoadBalancer" -}}
+{{- end -}}
 {{- if ne (toJson $jh.proxy.https.hosts) (toJson (list .Values.public.host)) -}}
 {{- fail (printf "jupyterhub.proxy.https.hosts must be [%s]" .Values.public.host) -}}
 {{- end -}}
 {{- if ne (toString $jh.proxy.https.secret.name) (toString .Values.public.tlsSecret) -}}
 {{- fail "jupyterhub.proxy.https.secret.name must equal public.tlsSecret" -}}
 {{- end -}}
-{{- if ne (toString (index $jh.proxy.service.annotations "external-dns.alpha.kubernetes.io/hostname")) (toString .Values.public.leafHost) -}}
+{{- $ann := $svc.annotations | default dict -}}
+{{- if ne (toString (index $ann "external-dns.alpha.kubernetes.io/hostname")) (toString .Values.public.leafHost) -}}
 {{- fail "jupyterhub.proxy.service external-dns hostname annotation must equal public.leafHost" -}}
 {{- end -}}
-{{- if not (has (index $jh.proxy.service.annotations "service.beta.kubernetes.io/aws-load-balancer-scheme") (list "internet-facing" "internal")) -}}
+{{- if not (has (index $ann "service.beta.kubernetes.io/aws-load-balancer-scheme") (list "internet-facing" "internal")) -}}
 {{- fail "jupyterhub.proxy.service load balancer scheme must be internet-facing or internal" -}}
 {{- end -}}
-{{- range $jh.proxy.service.loadBalancerSourceRanges -}}
-{{- if not (regexMatch "^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])[.]){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])/([0-9]|[12][0-9]|3[0-2])$" (toString .)) -}}
+{{- range $svc.loadBalancerSourceRanges -}}
+{{- if not (regexMatch $cidr (toString .)) -}}
 {{- fail (printf "allowed IPs: %q is not an IPv4 CIDR such as 203.0.113.7/32" (toString .)) -}}
 {{- end -}}
+{{- end -}}
+{{- else if eq (toString .Values.public.exposure) "shared" -}}
+{{- /* the entrance ends TLS and is the only way in: the proxy stays private and on plain HTTP */ -}}
+{{- if $jh.proxy.https.enabled -}}
+{{- fail "shared: jupyterhub.proxy.https.enabled must be false (TLS ends at the shared entrance)" -}}
+{{- end -}}
+{{- if ne (toString ($svc.type | default "ClusterIP")) "ClusterIP" -}}
+{{- fail "shared: jupyterhub.proxy.service.type must be ClusterIP (no load balancer of its own)" -}}
+{{- end -}}
+{{- if not (regexMatch "^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$" (toString .Values.public.ingressClassName)) -}}
+{{- fail "shared: public.ingressClassName must be an IngressClass name" -}}
+{{- end -}}
+{{- range (include "sg-notebooks.csv" (toString .Values.public.allowedCidrs) | fromJsonArray) -}}
+{{- if not (regexMatch $cidr (toString .)) -}}
+{{- fail (printf "allowed IPs: %q is not an IPv4 CIDR such as 203.0.113.7/32" (toString .)) -}}
+{{- end -}}
+{{- end -}}
+{{- if not (regexMatch "^[1-9][0-9]{0,5}$" (toString .Values.public.timeoutSeconds)) -}}
+{{- fail "shared: public.timeoutSeconds must be a whole number of seconds" -}}
+{{- end -}}
+{{- if not (regexMatch "^[0-9]{1,5}[kmg]?$" (toString .Values.public.maxUploadSize)) -}}
+{{- fail "shared: public.maxUploadSize must be like 512m" -}}
+{{- end -}}
+{{- else -}}
+{{- fail (printf "public.exposure must be shared or dedicated, got %q" (toString .Values.public.exposure)) -}}
 {{- end -}}
 {{- if not .Values.serviceAccount.name -}}
 {{- fail "serviceAccount.name is required (the platform fills ${seagit.app.sa_name})" -}}

@@ -2,7 +2,9 @@
 configurable-http-proxy reads its TLS certificate once, at start. cert-manager renews the secret 30
 days before expiry, so a scheduled restart of the proxy picks the new certificate up long before the
 old one lapses. Notebook servers are not touched; browser tabs reconnect within seconds.
+Dedicated exposure only: on the shared entrance TLS ends at the entrance, which reloads on its own.
 */ -}}
+{{- if eq (toString .Values.public.exposure) "dedicated" }}
 {{- $proxy := include "jupyterhub.proxy.fullname" . }}
 apiVersion: v1
 kind: ServiceAccount
@@ -72,3 +74,4 @@ spec:
               resources:
                 requests: { cpu: 10m, memory: 32Mi }
                 limits: { memory: 128Mi }
+{{- end }}

@@ -1,6 +1,7 @@
 // HTTP client for kind_test.sh: drives a running hub through the proxy the way a developer would
 // (sign-in form) and the way the platform would (REST API with a token). Node >= 22 (fetch, WebSocket).
-// usage: node hub_client.mjs <command> [args...]   env: HUB (https://127.0.0.1:8443), TOKEN
+// usage: node hub_client.mjs <command> [args...]   env: HUB (https://127.0.0.1:8443 or http://…), TOKEN
+import http from 'node:http';
 import https from 'node:https';
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const HUB = process.env.HUB || 'https://127.0.0.1:8443';
@@ -25,7 +26,8 @@ async function api(method, path, body) {
 function req(method, path, headers, body) {
   return new Promise((resolve, reject) => {
     const u = new URL(HUB + path);
-    const r = https.request({ host: u.hostname, port: u.port, path: u.pathname + u.search, method, headers, rejectUnauthorized: false }, (res) => {
+    const mod = u.protocol === 'http:' ? http : https;
+    const r = mod.request({ host: u.hostname, port: u.port, path: u.pathname + u.search, method, headers, rejectUnauthorized: false }, (res) => {
       let data = '';
       res.on('data', (d) => { data += d; });
       res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: data }));
@@ -95,17 +97,20 @@ async function waitStopped(user, timeoutS) {
   }
 }
 
+const wsBase = (u) => u.replace(/^http/, 'ws'); // http→ws, https→wss
+
 // Runs code in a fresh kernel on the user's server over the Jupyter kernel WebSocket protocol.
-async function run(user, code) {
+// idleSeconds: keep the open websocket silent that long first (an entrance's idle timeout).
+async function run(user, code, idleSeconds = 0) {
   const base = `${HUB}/user/${user}/api`;
   const h = { Authorization: `token ${TOKEN}`, 'Content-Type': 'application/json' };
   const k = await (await fetch(`${base}/kernels`, { method: 'POST', headers: h, body: '{}' })).json();
   if (!k.id) die(`${user}: no kernel (${JSON.stringify(k).slice(0, 200)})`);
-  const ws = new WebSocket(`${base.replace('https', 'wss')}/kernels/${k.id}/channels?token=${TOKEN}`);
+  const ws = new WebSocket(`${wsBase(base)}/kernels/${k.id}/channels?token=${TOKEN}`);
   const msgId = `kt-${Date.now()}`;
   const out = [];
   const done = new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error('kernel timeout')), 120000);
+    const t = setTimeout(() => reject(new Error('kernel timeout')), (120 + idleSeconds) * 1000);
     ws.onmessage = (ev) => {
       const m = JSON.parse(ev.data);
       if (m.parent_header?.msg_id !== msgId) return;
@@ -115,7 +120,10 @@ async function run(user, code) {
     };
     ws.onerror = (e) => reject(new Error(`websocket: ${e.message || 'error'}`));
   });
-  ws.onopen = () => ws.send(JSON.stringify({
+  await new Promise((resolve, reject) => { ws.addEventListener('open', resolve, { once: true }); ws.addEventListener('error', reject, { once: true }); });
+  if (idleSeconds) await sleep(idleSeconds * 1000);
+  if (ws.readyState !== WebSocket.OPEN) die(`${user}: websocket closed after ${idleSeconds}s idle`);
+  ws.send(JSON.stringify({
     header: { msg_id: msgId, username: user, session: msgId, msg_type: 'execute_request', version: '5.3' },
     parent_header: {}, metadata: {}, channel: 'shell',
     content: { code, silent: false, store_history: false, user_expressions: {}, allow_stdin: false },
@@ -124,6 +132,30 @@ async function run(user, code) {
   ws.close();
   await fetch(`${base}/kernels/${k.id}`, { method: 'DELETE', headers: h });
   return out.join('');
+}
+
+// A terminal round trip (Jupyter terminals API + websocket): create, run a command, read its output.
+async function term(user, command) {
+  const base = `${HUB}/user/${user}/api`;
+  const h = { Authorization: `token ${TOKEN}`, 'Content-Type': 'application/json' };
+  const t = await (await fetch(`${base}/terminals`, { method: 'POST', headers: h, body: '{}' })).json();
+  if (!t.name) die(`${user}: no terminal (${JSON.stringify(t).slice(0, 200)})`);
+  const ws = new WebSocket(`${wsBase(HUB)}/user/${user}/terminals/websocket/${t.name}?token=${TOKEN}`);
+  let out = '';
+  const done = new Promise((resolve, reject) => {
+    const to = setTimeout(() => reject(new Error(`terminal timeout, got: ${out.slice(-200)}`)), 60000);
+    ws.onmessage = (ev) => {
+      const [kind, text] = JSON.parse(ev.data);
+      if (kind === 'stdout') out += text;
+      if (out.includes('term-42')) { clearTimeout(to); resolve(); } // the echoed command reads term-$((6*7))
+    };
+    ws.onerror = (e) => reject(new Error(`terminal websocket: ${e.message || 'error'}`));
+  });
+  ws.onopen = () => ws.send(JSON.stringify(['stdin', `${command}\r`]));
+  await done;
+  ws.close();
+  await fetch(`${base}/terminals/${t.name}`, { method: 'DELETE', headers: h });
+  return 'term-42';
 }
 
 const [cmd, ...a] = process.argv.slice(2);
@@ -147,6 +179,20 @@ if (cmd === 'login') {
   console.log('stopped');
 } else if (cmd === 'run') {
   console.log(await run(a[0], a[1]));
+} else if (cmd === 'idle') {
+  // run after the kernel websocket sat idle N seconds (survives the entrance's read timeout?)
+  console.log(await run(a[0], a[2] || 'print(6*7)', Number(a[1] || 90)));
+} else if (cmd === 'term') {
+  console.log(await term(a[0], a[1] || 'echo term-$((6*7))'));
+} else if (cmd === 'upload') {
+  // PUT a file of N MiB through the contents API; prints the HTTP status
+  const size = Number(a[1] || 5) * 1024 * 1024;
+  const r = await fetch(`${HUB}/user/${a[0]}/api/contents/upload-${size}.bin`, {
+    method: 'PUT',
+    headers: { Authorization: `token ${TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'file', format: 'base64', content: Buffer.alloc(size, 7).toString('base64') }),
+  });
+  console.log(r.status);
 } else if (cmd === 'adduser') {
   const r = await api('POST', `/users/${a[0]}`);
   if (![201, 409].includes(r.status)) die(`adduser ${a[0]}: HTTP ${r.status}`);
